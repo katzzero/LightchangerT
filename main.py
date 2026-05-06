@@ -67,7 +67,7 @@ class GameStateController:
 
     def run(self):
         interval = self.config['network'].get('scan_interval_seconds', 30)
-        print(f"Starting GameNetLight service... (Interval: {interval}s)")
+        print(f"Starting LightchangerT service... (Interval: {interval}s)")
         try:
             while True:
                 self.update()

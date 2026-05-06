@@ -1,5 +1,5 @@
 {
-  "project": "GameNetLight",
+  "project": "LightchangerT",
   "description": "ESP32/RPi app to detect gaming consoles on network and change LED colors",
   "platform_support": ["ESP32", "Raspberry Pi", "General Linux SoC"],
   "color_mapping": {
