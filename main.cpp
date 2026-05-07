@@ -1,83 +1,111 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WebServer.h>
+#include <Preferences.h>
+#include <ESPPing.h>
 #include <FastLED.h>
+
 #include "config.h"
 #include "led_controller.h"
-#include "network_scanner.h"
-#include "liveness_engine.h"
-#include "steam_detector.h"
+#include "web_ui.h"
+#include "config_manager.h"
 
+// Hardware Objects
 LEDController led;
-NetworkScanner scanner;
-LivenessEngine liveness;
-SteamDetector steam;
+ConfigManager configManager;
 
-// Priority tracking: brand -> last seen timestamp
+// Web Server on Port 80
+WebServer server(80);
+
+// State
 std::map<String, unsigned long> lastSeen;
+
+void handleRoot() {
+    server.send(200, "text/html", INDEX_HTML);
+}
+
+void handleSave() {
+    if (server.hasArg("ip") && server.hasArg("brand")) {
+        String ip = server.arg("ip");
+        String brand = server.arg("brand");
+        
+        configManager.addDevice(ip, brand);
+        
+        server.send(200, "text/html", "<html><body><h1>Device Added! <a href='/'>Back</a></h1></body></html>");
+    } else {
+        server.send(400, "text/html", "Invalid Data");
+    }
+}
+
+void handleClear() {
+    configManager.clearDevices();
+    server.send(200, "text/html", "<html><body><h1>Devices Cleared! <a href='/'>Back</a></h1></body></html>");
+}
 
 void setup() {
     Serial.begin(115200);
-    
-    // Initialize LEDs
+
+    // LED Init
     led.begin();
-    
-    // Initialize WiFi
+
+    // WiFi Init
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
     }
     Serial.println("\nWiFi Connected");
+    Serial.println(WiFi.localIP());
+
+    // Config Manager Init
+    configManager.begin();
+
+    // Web Server Routes
+    server.on("/", handleRoot);
+    server.on("/save", HTTP_POST, handleSave);
+    server.on("/clear", HTTP_GET, handleClear);
     
-    // Initialize mDNS
-    if (!MDNS.begin("lightchanger-esp32")) {
-        Serial.println("Error setting up MDNS responder!");
-    }
+    server.begin();
+    Serial.println("Web Server started on port 80");
 }
 
 void loop() {
-    Serial.println("Scanning network...");
-    
-    std::vector<Device> candidates = scanner.scan();
-    std::vector<IPAddress> activeIps;
-    std::vector<String> currentlyActiveBrands;
+    server.handleClient();
 
-    // Verify Liveness
-    for (const auto& device : candidates) {
-        if (liveness.isAlive(device.ip)) {
-            lastSeen[device.brand] = millis();
-            currentlyActiveBrands.push_back(device.brand);
-            activeIps.push_back(device.ip);
-        }
-    }
+    // Get configured devices
+    std::vector<DeviceConfig> devices = configManager.getDevices();
+    bool anyActive = false;
+    String winnerBrand = "";
+    unsigned long maxTs = 0;
 
-    // Special Steam detection
-    if (steam.detect(activeIps)) {
-        lastSeen["steam"] = millis();
-        currentlyActiveBrands.push_back("steam");
-    }
+    for (const auto& dev : devices) {
+        IPAddress ip;
+        if (ip.fromString(dev.ip)) {
+            // Ping the device
+            if (ESPPing.ping(ip, 1)) {
+                lastSeen[dev.brand] = millis();
+                anyActive = true;
+                Serial.print("Device Online: ");
+                Serial.println(dev.ip);
 
-    // Priority Logic (Last Online Wins)
-    if (currentlyActiveBrands.empty()) {
-        led.setColor(COLOR_DEFAULT);
-    } else {
-        String winner = "";
-        unsigned long maxTs = 0;
-        
-        for (const auto& brand : currentlyActiveBrands) {
-            if (lastSeen[brand] > maxTs) {
-                maxTs = lastSeen[brand];
-                winner = brand;
+                if (lastSeen[dev.brand] > maxTs) {
+                    maxTs = lastSeen[dev.brand];
+                    winnerBrand = dev.brand;
+                }
             }
         }
+    }
 
-        if (winner == "sony") led.setColor(COLOR_SONY);
-        else if (winner == "microsoft") led.setColor(COLOR_MICROSOFT);
-        else if (winner == "nintendo") led.setColor(COLOR_NINTENDO);
-        else if (winner == "steam") led.setColor(COLOR_STEAM);
-        else if (winner == "nvidia") led.setColor(COLOR_NVIDIA);
+    if (!anyActive) {
+        led.setColor(COLOR_DEFAULT); // Default White
+    } else {
+        if (winnerBrand == "sony") led.setColor(COLOR_SONY);
+        else if (winnerBrand == "microsoft") led.setColor(COLOR_MICROSOFT);
+        else if (winnerBrand == "nintendo") led.setColor(COLOR_NINTENDO);
+        else if (winnerBrand == "steam") led.setColor(COLOR_STEAM);
+        else if (winnerBrand == "nvidia") led.setColor(COLOR_NVIDIA);
         else led.setColor(COLOR_DEFAULT);
     }
 
-    delay(SCAN_INTERVAL_MS);
+    delay(1000); // Check every second
 }
