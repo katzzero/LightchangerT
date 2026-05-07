@@ -1,8 +1,10 @@
 import time
+import threading
 from scanner import NetworkScanner
 from liveness import LivenessEngine
 from led_controller import get_led_controller
 from steam_detector import SteamDetector
+from web_config import run_server
 import json
 
 class GameStateController:
@@ -66,6 +68,17 @@ class GameStateController:
             self.led.set_color(color)
 
     def run(self):
+        # Start Web Config Server if enabled
+        web_enabled = self.config['network'].get('web_config_enabled', False)
+        web_port = self.config['network'].get('web_config_port', 80)
+        
+        if web_enabled:
+            print(f"Starting Web Config Server on port {web_port}...")
+            # Run in a separate thread so it doesn't block the main loop
+            web_thread = threading.Thread(target=run_server, args=(web_port,))
+            web_thread.daemon = True
+            web_thread.start()
+
         interval = self.config['network'].get('scan_interval_seconds', 30)
         print(f"Starting LightchangerT service... (Interval: {interval}s)")
         try:
