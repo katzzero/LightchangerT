@@ -38,13 +38,9 @@ public:
 
 private:
     String getMacFromIP(IPAddress ip) {
-        // Low-level ESP-IDF call to get MAC from ARP table
-        uint8_t mac[6];
-        if (esp_netif_get_mac_address(ip, mac) == ESP_OK) { // Simplified representative call
-            char macStr[18];
-            sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-            return String(macStr);
-        }
+        // Use lwip to get ARP table entry
+        // Note: This is a placeholder - real impl requires esp_netif APIs
+        // For now, return empty and rely on static list or other discovery
         return "";
     }
 

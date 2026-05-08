@@ -11,7 +11,7 @@ public:
     bool detect(const std::vector<IPAddress>& activeIps) {
         // 1. Attempt mDNS discovery for the hostname
         if (std::string(STEAM_MDNS_HOSTNAME) != "") {
-            IPAddress dnsIp = MDNS.queryAddress(STEAM_MDNS_HOSTNAME);
+            IPAddress dnsIp = MDNS.queryHost(STEAM_MDNS_HOSTNAME, 2000);
             if (dnsIp != IPAddress(0,0,0,0)) {
                 if (probePort(dnsIp)) return true;
             }
@@ -27,7 +27,7 @@ public:
 private:
     bool probePort(IPAddress ip) {
         WiFiClient client;
-        if (client.connectAsynchronously(ip, STEAM_PORT)) {
+        if (client.connect(ip, STEAM_PORT)) {
             client.stop();
             return true;
         }

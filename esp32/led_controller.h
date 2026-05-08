@@ -10,7 +10,7 @@ private:
 
 public:
     void begin() {
-        FastLED.addLEDS<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
+        FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
         FastLED.setBrightness(BRIGHTNESS);
         setBkgColor();
     }

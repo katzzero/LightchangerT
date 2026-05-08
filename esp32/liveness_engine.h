@@ -8,12 +8,8 @@
 class LivenessEngine {
 public:
     bool isAlive(IPAddress ip) {
-        // Ping the address. 
-        // ESPping::ping returns true if the host is reachable.
-        if (ESPping::ping(ip, 1)) {
-            return true;
-        }
-        return false;
+        // Ping the address using ESPping library
+        return Ping.ping(ip, 1);
     }
 };
 
