@@ -1,0 +1,99 @@
+{
+  "project": "LightchangerT",
+  "version": "1.0.0",
+  "description": "Network-based gaming console detection with LED color feedback",
+  "branch_type": "esp32",
+  "platform": {
+    "primary": "ESP32",
+    "framework": "Arduino ESP-IDF",
+    "language": "C++"
+  },
+
+  "pipeline": {
+    "setup": [
+      "Install Arduino CLI or PlatformIO",
+      "Install ESP32 board: arduino-cli core install esp32:esp32",
+      "Install libraries: FastLED, ESPPing, ESPmDNS",
+      "Configure config.h with WiFi credentials"
+    ],
+    "testing": [
+      "arduino-cli compile --fqbn esp32:esp32:esp32 .",
+      "Upload: arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32 ."
+    ],
+    "build": "arduino-cli compile --fqbn esp32:esp32:esp32 .",
+    "deploy": [
+      "Connect ESP32 via USB",
+      "arduino-cli upload -p <port> --fqbn esp32:esp32:esp32 .",
+      "Monitor: arduino-cli monitor -p <port>"
+    ]
+  },
+
+  "sync_instructions": {
+    "description": "Guidelines for syncing features between Python (main) and ESP32 branches",
+    "principles": [
+      "Each branch maintains independent implementation appropriate for its platform",
+      "Feature parity is goal, not exact code parity",
+      "Manifest updates should be mirrored to both branches"
+    ],
+    "when_to_sync": [
+      "Adding new device detection methods",
+      "Adding new supported brands",
+      "Changing detection logic/priority algorithms",
+      "Adding new configuration options",
+      "Fixing bugs that apply to both platforms"
+    ],
+    "sync_process": {
+      "step1": "Implement feature on originating branch",
+      "step2": "Test thoroughly on that platform",
+      "step3": "Port logic to other branch (adapt code, not copy-paste)",
+      "step4": "Test on second platform",
+      "step5": "Update both manifests to reflect new feature",
+      "step6": "Commit with descriptive message mentioning both branches"
+    },
+    "do_not_sync": [
+      "Platform-specific hardware code (LED drivers)",
+      "Network stack differences (WiFi vs Ethernet)",
+      "Memory management differences",
+      "Build system configurations"
+    ]
+  },
+
+  "architecture": {
+    "components": {
+      "esp32.ino": "Main sketch entry point",
+      "main.cpp": "Alternative entry (legacy)",
+      "config.h": "Hardware and network configuration",
+      "led_controller.h": "FastLED driver",
+      "network_scanner.h": "Subnet scanning and MAC OUI detection",
+      "liveness_engine.h": "ICMP ping via ESPPing",
+      "steam_detector.h": "Steam detection (mDNS/port probe)",
+      "web_ui.h": "HTML configuration interface"
+    },
+    "flow": "Scan -> Verify Liveness -> Check Steam -> Determine Priority -> Set LED"
+  },
+
+  "detection": {
+    "methods": ["MAC_OUI", "STATIC_LIST", "PORT_PROBE", "MDNS"],
+    "validation": "ICMP_Ping (ESPPing)",
+    "deep_sleep_handling": "Considered offline if ping fails",
+    "priority_logic": "Last online device wins"
+  },
+
+  "color_mapping": {
+    "sony": "blue",
+    "microsoft": "green",
+    "nintendo": "red",
+    "steam": "light_blue",
+    "nvidia": "light_green",
+    "default": "white"
+  },
+
+  "hardware": {
+    "led_pin": 13,
+    "num_leds": 30,
+    "brightness": 128
+  },
+
+  "current_phase": "Production",
+  "last_updated": "2025-05-08"
+}
