@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class LEDController(ABC):
     @abstractmethod
@@ -16,35 +19,35 @@ class FastLEDController(LEDController):
     def __init__(self, config):
         self.pin = config['hardware']['led_pin']
         self.num_leds = config['hardware']['num_leds']
-        print(f"FastLED initialized on pin {self.pin} with {self.num_leds} LEDs")
+        logger.info(f"FastLED initialized on pin {self.pin} with {self.num_leds} LEDs")
 
     def set_color(self, color_name):
-        print(f"FastLED: Setting color to {color_name}")
+        logger.debug(f"FastLED: Setting color to {color_name}")
 
     def off(self):
-        print("FastLED: Turning OFF")
+        logger.debug("FastLED: Turning OFF")
 
 class NeoPixelController(LEDController):
     def __init__(self, config):
         self.pin = config['hardware']['led_pin']
-        print(f"NeoPixel initialized on pin {self.pin}")
+        logger.info(f"NeoPixel initialized on pin {self.pin}")
 
     def set_color(self, color_name):
-        print(f"NeoPixel: Setting color to {color_name}")
+        logger.debug(f"NeoPixel: Setting color to {color_name}")
 
     def off(self):
-        print("NeoPixel: Turning OFF")
+        logger.debug("NeoPixel: Turning OFF")
 
 class RPiLEDController(LEDController):
     def __init__(self, config):
         self.pin = config['hardware']['led_pin']
-        print(f"RPi_WS281X initialized on pin {self.pin}")
+        logger.info(f"RPi_WS281X initialized on pin {self.pin}")
 
     def set_color(self, color_name):
-        print(f"RPi_WS281X: Setting color to {color_name}")
+        logger.debug(f"RPi_WS281X: Setting color to {color_name}")
 
     def off(self):
-        print("RPi_WS281X: Turning OFF")
+        logger.debug("RPi_WS281X: Turning OFF")
 
 def get_led_controller(config):
     lib = config['hardware']['led_library'].upper()

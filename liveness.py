@@ -1,12 +1,14 @@
 import subprocess
 import platform
+import logging
+
+logger = logging.getLogger(__name__)
 
 class LivenessEngine:
     def __init__(self, config_path="config.json"):
         import json
         with open(config_path, 'r') as f:
             self.config = json.load(f)
-        self.threshold = self.config['network'].get('offline_threshold', 3)
 
     def is_alive(self, ip):
         """

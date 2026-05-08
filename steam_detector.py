@@ -7,7 +7,6 @@ class SteamDetector:
         self.method = self.config.get('method', 'PORT_PROBE')
         self.port = self.config.get('port', 27036)
         self.hostname = self.config.get('mdns_hostname', 'steamdeck.local')
-        self.found_ip = None
 
     def _probe_port(self, ip):
         """Tries to connect to the Steam port to verify active status."""

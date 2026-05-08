@@ -1,6 +1,10 @@
 import json
 import os
+import logging
+from urllib.parse import parse_qs
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+logger = logging.getLogger(__name__)
 
 CONFIG_FILE = "config.json"
 
@@ -91,36 +95,50 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
         if self.path == '/save':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length).decode('utf-8')
-            
+
             try:
-                # Parse form data (simplified parsing)
-                params = {}
-                for item in post_data.split('&'):
-                    key, value = item.split('=')
-                    params[key] = value.replace('%20', ' ').replace('%22', '"').replace('%3A', ':')
-                
+                # Parse form data properly using urllib.parse
+                params = parse_qs(post_data, keep_blank_values=True)
+                # parse_qs returns lists, get first value
+                params = {k: v[0] if v else '' for k, v in params.items()}
+
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
-                
-                # Update config
+
+                # Update config with validation
                 if 'network_scan_interval_seconds' in params:
-                    config['network']['scan_interval_seconds'] = int(params['network_scan_interval_seconds'])
+                    try:
+                        val = int(params['network_scan_interval_seconds'])
+                        if 1 <= val <= 3600:
+                            config['network']['scan_interval_seconds'] = val
+                    except ValueError:
+                        raise ValueError("Invalid scan interval")
+
                 if 'network_detection_mode' in params:
-                    config['network']['detection_mode'] = params['network_detection_mode']
+                    mode = params['network_detection_mode']
+                    if mode in ('HYBRID', 'STATIC_LIST', 'AUTO'):
+                        config['network']['detection_mode'] = mode
+
                 if 'devices_static_list' in params:
                     config['devices']['static_list'] = json.loads(params['devices_static_list'])
+
                 if 'colors' in params:
                     config['colors'] = json.loads(params['colors'])
+
                 if 'hardware' in params:
                     config['hardware'] = json.loads(params['hardware'])
-                
+
                 with open(CONFIG_FILE, 'w') as f:
                     json.dump(config, f, indent=2)
-                
+
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
                 self.wfile.write(b"Configuration Saved! <a href='/'>Back</a>")
+            except json.JSONDecodeError as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(f"Invalid JSON format: {e}".encode())
             except Exception as e:
                 self.send_response(500)
                 self.end_headers()
@@ -129,7 +147,7 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
 def run_server(port=80):
     server_address = ('', port)
     httpd = HTTPServer(server_address, ConfigRequestHandler)
-    print(f"Web Config Server started on port {port}")
+    logger.info(f"Web Config Server started on port {port}")
     httpd.serve_forever()
 
 if __name__ == '__main__':

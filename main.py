@@ -1,11 +1,18 @@
 import time
 import threading
+import logging
 from scanner import NetworkScanner
 from liveness import LivenessEngine
 from led_controller import get_led_controller
 from steam_detector import SteamDetector
 from web_config import run_server
 import json
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 class GameStateController:
     def __init__(self, config_path="config.json"):
@@ -60,10 +67,12 @@ class GameStateController:
             self.led.set_color(color)
             return
 
+        # Filter last_seen to only include currently active devices
+        active_last_seen = {brand: ts for brand, ts in self.last_seen.items() if brand in currently_active}
+
         # Find brand with the maximum timestamp among active devices
-        winner = max(self.last_seen, key=self.last_seen.get)
-        # Only set color if the winner is actually in the active list for this cycle
-        if winner in currently_active:
+        if active_last_seen:
+            winner = max(active_last_seen, key=active_last_seen.get)
             color = self.color_map.get(winner, "white")
             self.led.set_color(color)
 
@@ -71,22 +80,22 @@ class GameStateController:
         # Start Web Config Server if enabled
         web_enabled = self.config['network'].get('web_config_enabled', False)
         web_port = self.config['network'].get('web_config_port', 80)
-        
+
         if web_enabled:
-            print(f"Starting Web Config Server on port {web_port}...")
+            logger.info(f"Starting Web Config Server on port {web_port}")
             # Run in a separate thread so it doesn't block the main loop
             web_thread = threading.Thread(target=run_server, args=(web_port,))
             web_thread.daemon = True
             web_thread.start()
 
         interval = self.config['network'].get('scan_interval_seconds', 30)
-        print(f"Starting LightchangerT service... (Interval: {interval}s)")
+        logger.info(f"Starting LightchangerT service (Interval: {interval}s)")
         try:
             while True:
                 self.update()
                 time.sleep(interval)
         except KeyboardInterrupt:
-            print("Shutting down...")
+            logger.info("Shutting down...")
             self.led.off()
 
 if __name__ == "__main__":

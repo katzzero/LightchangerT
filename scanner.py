@@ -2,6 +2,9 @@ import json
 import os
 import subprocess
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 class NetworkScanner:
     def __init__(self, config_path="config.json"):
@@ -35,20 +38,22 @@ class NetworkScanner:
 
     def scan(self):
         """
-        Performs a network scan. 
+        Performs a network scan.
         In a real implementation, this would use scapy or nmap.
         Here we simulate discovery based on static list and local cache.
         """
+        seen_ips = set()
         discovered = []
-        
+
         # 1. Check Static List first
         for dev in self.static_devices:
+            seen_ips.add(dev['ip'])
             discovered.append({
                 "ip": dev['ip'],
                 "mac": dev['mac'],
                 "brand": dev['brand']
             })
-            
+
         # 2. Dynamic discovery (Simulated via ARP table for this build phase)
         try:
             arp_output = subprocess.check_output(["arp", "-a"]).decode()
@@ -58,13 +63,15 @@ class NetworkScanner:
                 parts = re.findall(r"(\d+\.\d+\.\d+\.\d+).*?([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})", line)
                 if parts:
                     ip = parts[0][0]
-                    # Reconstruct MAC from regex groups
+                    if ip in seen_ips:
+                        continue
                     mac_match = re.search(r"([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})", line).group(0).lower()
                     brand = self.identify_brand(mac_match)
                     if brand:
+                        seen_ips.add(ip)
                         discovered.append({"ip": ip, "mac": mac_match, "brand": brand})
         except Exception as e:
-            print(f"Scanning error: {e}")
+            logger.error(f"Scanning error: {e}")
 
         return discovered
 
