@@ -60,6 +60,17 @@ const std::vector<VendorOUI> NVDA_OUIS = {
 
 // Steam Detection
 const int STEAM_PORT = 27036;
+const int STEAM_PORT_2 = 27016;
+const int STEAM_PORT_3 = 27017;
+const int STEAM_PORT_4 = 27015;
+const int STEAM_TOTAL_PORTS = 4;
+const int STEAM_PORTS[] = {STEAM_PORT, STEAM_PORT_2, STEAM_PORT_3, STEAM_PORT_4};
 const char* STEAM_MDNS_HOSTNAME = "steamdeck.local";
+const char* STEAM_MDNS_HOSTNAME_2 = "steam-pc.local";
+const char* STEAM_MDNS_HOSTNAME_3 = "steam-deck.local";
+const int STEAM_MDNS_TOTAL = 3;
+const char* STEAM_MDNS_HOSTNAMES[] = {STEAM_MDNS_HOSTNAME, STEAM_MDNS_HOSTNAME_2, STEAM_MDNS_HOSTNAME_3};
+const int STEAM_PROBE_TIMEOUT_MS = 1000;
+const int STEAM_RETRY_COUNT = 2;
 
 #endif
