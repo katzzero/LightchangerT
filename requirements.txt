@@ -1,0 +1,8 @@
+# LightchangerT - Python requirements
+# Network discovery
+# zeroconf==4.2.0  # Optional - used by steam_detector.py for mDNS
+
+# LED controller libraries (uncomment based on your hardware):
+# FastLED==3.9.12
+# rpi_ws281x==6.1.2
+# neopixel==1.9.5

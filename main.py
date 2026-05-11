@@ -92,7 +92,10 @@ class GameStateController:
         logger.info(f"Starting LightchangerT service (Interval: {interval}s)")
         try:
             while True:
-                self.update()
+                try:
+                    self.update()
+                except Exception as e:
+                    logger.exception(f"Error in update cycle: {e}")
                 time.sleep(interval)
         except KeyboardInterrupt:
             logger.info("Shutting down...")

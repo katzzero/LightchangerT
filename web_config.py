@@ -1,6 +1,7 @@
 import json
 import os
 import logging
+import tempfile
 from urllib.parse import parse_qs
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -102,10 +103,10 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
                 # parse_qs returns lists, get first value
                 params = {k: v[0] if v else '' for k, v in params.items()}
 
-                with open(CONFIG_FILE, 'r') as f:
+                with open(CONFIG_FILE, 'r+') as f:
                     config = json.load(f)
 
-                # Update config with validation
+                 # Update config with validation
                 if 'network_scan_interval_seconds' in params:
                     try:
                         val = int(params['network_scan_interval_seconds'])
@@ -128,8 +129,16 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
                 if 'hardware' in params:
                     config['hardware'] = json.loads(params['hardware'])
 
-                with open(CONFIG_FILE, 'w') as f:
-                    json.dump(config, f, indent=2)
+                 # Atomic write: write to temp file then rename
+                dir_name = os.path.dirname(CONFIG_FILE) or '.'
+                fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+                try:
+                    with os.fdopen(fd, 'w') as f:
+                        json.dump(config, f, indent=2)
+                    os.replace(tmp_path, CONFIG_FILE)
+                except Exception:
+                    os.unlink(tmp_path)
+                    raise
 
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html')
