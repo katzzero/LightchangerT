@@ -1,91 +1,123 @@
 {
-  "project": "LightchangerT",
-  "version": "1.0.0",
-  "description": "Network-based gaming console detection with LED color feedback",
-  "branch_type": "python",
-  "platform": {
-    "primary": "Raspberry Pi",
-    "secondary": "General Linux SoC",
-    "language": "Python 3"
-  },
-
-  "pipeline": {
-    "setup": [
-      "Install Python 3.8+",
-      "Run: pip install -r requirements.txt (if exists)",
-      "Configure config.json with network settings",
-      "Test: python main.py"
-    ],
-    "testing": [
-      "python -m py_compile *.py",
-      "python -m unittest discover (if tests exist)"
-    ],
-    "build": "Native Python - no build step required",
-    "deploy": [
-      "Set execution bit: chmod +x main.py",
-      "Run as service or manually: python main.py"
-    ]
-  },
-
-  "sync_instructions": {
-    "description": "Guidelines for syncing features between Python (main) and ESP32 branches",
-    "principles": [
-      "Each branch maintains independent implementation appropriate for its platform",
-      "Feature parity is goal, not exact code parity",
-      "Manifest updates should be mirrored to both branches"
-    ],
-    "when_to_sync": [
-      "Adding new device detection methods",
-      "Adding new supported brands",
-      "Changing detection logic/priority algorithms",
-      "Adding new configuration options",
-      "Fixing bugs that apply to both platforms"
-    ],
-    "sync_process": {
-      "step1": "Implement feature on originating branch",
-      "step2": "Test thoroughly on that platform",
-      "step3": "Port logic to other branch (adapt code, not copy-paste)",
-      "step4": "Test on second platform",
-      "step5": "Update both manifests to reflect new feature",
-      "step6": "Commit with descriptive message mentioning both branches"
+    "project": "LightchangerT",
+    "version": "2.0.0",
+    "description": "Network-based gaming console detection with LED color feedback on Raspberry Pi/Linux",
+    "branch_type": "python",
+    "platform": {
+        "primary": "Raspberry Pi",
+        "secondary": "General Linux SoC",
+        "language": "Python 3.8+",
+        "os_requirements": "Linux with arp, ping commands available"
     },
-    "do_not_sync": [
-      "Platform-specific hardware code (LED drivers)",
-      "Network stack differences (WiFi vs Ethernet)",
-      "Memory management differences",
-      "Build system configurations"
-    ]
-  },
 
-  "architecture": {
-    "components": {
-      "main.py": "Entry point and state machine",
-      "scanner.py": "Network device discovery (ARP/MAC OUI)",
-      "liveness.py": "ICMP ping validation",
-      "steam_detector.py": "Special Steam detection (mDNS/port probe)",
-      "led_controller.py": "LED color management (FastLED/NeoPixel/RPi_WS281x)",
-      "web_config.py": "HTTP configuration UI",
-      "config_manager.py": "Thread-safe config loader"
+    "pipeline": {
+        "setup": [
+            "Install Python 3.8+",
+            "Run: pip install -r requirements.txt (optional dependencies)",
+            "Configure config.json with network settings and LED hardware",
+            "Test: python3 main.py"
+        ],
+        "testing": [
+            "python3 -m py_compile *.py",
+            "python3 -m unittest discover (when tests exist)"
+        ],
+        "build": "Native Python - no build step required",
+        "deploy": [
+            "Copy files to target machine",
+            "Set execution bit: chmod +x main.py",
+            "Run manually: python3 main.py",
+            "Or as systemd service (see README.md)"
+        ]
     },
-    "flow": "Scan -> Verify Liveness -> Check Steam -> Determine Priority -> Set LED"
-  },
 
-  "detection": {
-    "methods": ["MAC_OUI", "STATIC_LIST", "PORT_PROBE", "MDNS"],
-    "validation": "ICMP_Ping",
-    "deep_sleep_handling": "Considered offline if ping fails",
-    "priority_logic": "Last online device wins"
-  },
+    "sync_instructions": {
+        "description": "Guidelines for syncing features between Python (main) and ESP32 branches",
+        "principles": [
+            "Each branch maintains independent implementation appropriate for its platform",
+            "Feature parity is goal, not exact code parity",
+            "Manifest updates should be mirrored to both branches",
+            "Detection logic (MAC_OUI, STATIC_LIST, PORT_PROBE, MDNS) should be consistent"
+        ],
+        "when_to_sync": [
+            "Adding new device detection methods",
+            "Adding new supported brands and colors",
+            "Changing detection logic/priority algorithms",
+            "Adding new configuration options",
+            "Fixing bugs that apply to both platforms",
+            "UI/UX improvements to web config interface"
+        ],
+        "sync_process": {
+            "step1": "Implement feature on originating branch",
+            "step2": "Test thoroughly on that platform (compile + verify)",
+            "step3": "Port logic to other branch (adapt code, not copy-paste)",
+            "step4": "Test on second platform",
+            "step5": "Update both manifests to reflect new feature",
+            "step6": "Commit with descriptive message mentioning both branches"
+        },
+        "do_not_sync": [
+            "Platform-specific hardware code (LED drivers)",
+            "Network stack differences (ARP vs WiFi)",
+            "Memory management differences",
+            "Build system configurations",
+            "Language-specific patterns (Python threads vs Arduino loops)"
+        ]
+    },
 
-  "color_mapping": {
-    "sony": "blue",
-    "microsoft": "green",
-    "nintendo": "red",
-    "steam": "light_blue",
-    "nvidia": "light_green",
-    "default": "white"
-  },
+    "architecture": {
+        "components": {
+            "main.py": "Entry point, GameStateController class, main loop with error recovery",
+            "scanner.py": "Network device discovery via ARP table + static list",
+            "config_manager.py": "Thread-safe singleton config loader with RLock",
+            "liveness.py": "ICMP ping validation via subprocess",
+            "steam_detector.py": "Steam detection via port probe or mDNS (zeroconf)",
+            "led_controller.py": "LED color management with factory pattern (FastLED/NeoPixel/RPi_WS281x)",
+            "web_config.py": "HTTP configuration UI with JSON editor and atomic writes"
+        },
+        "flow": "Scan ARP table -> Verify Liveness (ping) -> Check Steam port -> Determine Priority -> Set LED"
+    },
 
-  "current_phase": "Production",
-  "last_updated": "2025-05-08"
+    "detection": {
+        "methods": ["MAC_OUI", "STATIC_LIST", "PORT_PROBE", "MDNS"],
+        "validation": "ICMP_Ping via subprocess",
+        "deep_sleep_handling": "Considered offline if ping fails",
+        "priority_logic": "Last online device wins",
+        "device_management": "Web UI with JSON editor for static devices and colors"
+    },
+
+    "color_mapping": {
+        "sony": "blue",
+        "microsoft": "green",
+        "nintendo": "red",
+        "steam": "light_blue",
+        "nvidia": "light_green",
+        "default": "white"
+    },
+
+    "web_config": {
+        "enabled_via_config": "config.json network.web_config_enabled",
+        "default_port": 80,
+        "endpoints": [
+            "GET / - Main configuration UI with JSON editor",
+            "POST /save - Save configuration (atomic write via tempfile)",
+            "Fields: network_scan_interval_seconds, network_detection_mode, devices_static_list, colors, hardware"
+        ],
+        "security_notes": [
+            "No authentication - only for trusted networks",
+            "Atomic writes prevent config corruption"
+        ]
+    },
+
+    "hardware": {
+        "supported_led_libraries": ["FASTLED", "NEOPIXEL", "RPI_WS281X"],
+        "config_fields": ["led_pin", "num_leds", "brightness"]
+    },
+
+    "dependencies": {
+        "core": [],
+        "optional": ["zeroconf (for mDNS Steam detection)"],
+        "installation": "pip install -r requirements.txt"
+    },
+
+    "current_phase": "Production",
+    "last_updated": "2026-05-11"
 }
