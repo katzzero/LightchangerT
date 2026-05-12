@@ -1,121 +1,142 @@
 {
-   "project": "LightchangerT",
-   "version": "2.0.0",
-   "description": "Network-based gaming console detection with LED color feedback on ESP32",
-   "branch_type": "esp32",
-   "platform": {
-     "primary": "ESP32",
-     "framework": "Arduino ESP-IDF",
-     "language": "C++",
-     "toolchain": "arduino-cli esp32:esp32"
-   },
+    "project": "LightchangerT",
+    "version": "2.1.0",
+    "description": "Network-based gaming console detection with LED color feedback on Raspberry Pi/Linux",
+    "branch_type": "python",
+    "platform": {
+        "primary": "Raspberry Pi",
+        "secondary": "General Linux SoC",
+        "language": "Python 3.8+",
+        "os_requirements": "Linux with arp, ping commands available"
+    },
 
-   "pipeline": {
-     "setup": [
-       "Install Arduino CLI: brew install arduino-cli",
-       "Install ESP32 board: arduino-cli core install esp32:esp32",
-       "Install libraries: arduino-cli lib install FastLED ESPping ESPmDNS",
-       "Configure config.h with WiFi credentials"
-     ],
-     "testing": [
-       "arduino-cli compile --fqbn esp32:esp32:esp32 ."
-     ],
-     "build": "arduino-cli compile --fqbn esp32:esp32:esp32 .",
-     "deploy": [
-       "Connect ESP32 via USB to /dev/ttyUSB0 or /dev/cu.*",
-       "arduino-cli upload -p <port> --fqbn esp32:esp32:esp32 .",
-       "Monitor: arduino-cli monitor -p <port> -b 115200"
-     ]
-   },
+    "pipeline": {
+        "setup": [
+            "Install Python 3.8+",
+            "Run: pip install -r requirements.txt (optional dependencies)",
+            "Configure config.json with network settings and LED hardware",
+            "Test: python3 main.py"
+        ],
+        "testing": [
+            "python3 -m py_compile *.py",
+            "python3 -m unittest discover (when tests exist)"
+        ],
+        "build": "Native Python - no build step required",
+        "deploy": [
+            "Copy files to target machine",
+            "Set execution bit: chmod +x main.py",
+            "Run manually: python3 main.py",
+            "Or as systemd service (see README.md)"
+        ]
+    },
 
-   "sync_instructions": {
-     "description": "Guidelines for syncing features between Python (main) and ESP32 branches",
-     "principles": [
-       "Each branch maintains independent implementation appropriate for its platform",
-       "Feature parity is goal, not exact code parity",
-       "Manifest updates should be mirrored to both branches",
-       "Detection logic (MAC_OUI, STATIC_LIST, PORT_PROBE, MDNS) should be consistent"
-     ],
-     "when_to_sync": [
-       "Adding new device detection methods",
-       "Adding new supported brands and colors",
-       "Changing detection logic/priority algorithms",
-       "Adding new configuration options",
-       "Fixing bugs that apply to both platforms",
-       "UI/UX improvements to web config interface"
-     ],
-     "sync_process": {
-       "step1": "Implement feature on originating branch",
-       "step2": "Test thoroughly on that platform (compile + verify)",
-       "step3": "Port logic to other branch (adapt code, not copy-paste)",
-       "step4": "Test on second platform",
-       "step5": "Update both manifests to reflect new feature",
-       "step6": "Commit with descriptive message mentioning both branches"
-     },
-     "do_not_sync": [
-       "Platform-specific hardware code (LED drivers)",
-       "Network stack differences (WiFi vs Ethernet)",
-       "Memory management differences",
-       "Build system configurations",
-       "Language-specific patterns (Arduino loops vs Python threads)"
-     ]
-   },
+    "sync_instructions": {
+        "description": "Guidelines for syncing features between Python (main) and ESP32 branches",
+        "principles": [
+            "Each branch maintains independent implementation appropriate for its platform",
+            "Feature parity is goal, not exact code parity",
+            "Manifest updates should be mirrored to both branches",
+            "Detection logic (MAC_OUI, STATIC_LIST, PORT_PROBE, MDNS) should be consistent"
+        ],
+        "when_to_sync": [
+            "Adding new device detection methods",
+            "Adding new supported brands and colors",
+            "Changing detection logic/priority algorithms",
+            "Adding new configuration options",
+            "Fixing bugs that apply to both platforms",
+            "UI/UX improvements to web config interface"
+        ],
+        "sync_process": {
+            "step1": "Implement feature on originating branch",
+            "step2": "Test thoroughly on that platform (compile + verify)",
+            "step3": "Port logic to other branch (adapt code, not copy-paste)",
+            "step4": "Test on second platform",
+            "step5": "Update both manifests to reflect new feature",
+            "step6": "Commit with descriptive message mentioning both branches"
+        },
+        "do_not_sync": [
+            "Platform-specific hardware code (LED drivers)",
+            "Network stack differences (ARP vs WiFi)",
+            "Memory management differences",
+            "Build system configurations",
+            "Language-specific patterns (Python threads vs Arduino loops)"
+        ]
+    },
 
-   "architecture": {
-     "components": {
-       "esp32.ino": "Main sketch - non-blocking loop, WiFi reconnect, web server",
-       "config.h": "Hardware config, WiFi credentials, colors, OUI prefixes",
-       "led_controller.h": "FastLED driver wrapper",
-       "config_manager.h": "NVS/Prefs storage with CRUD operations (add/edit/delete)",
-       "network_scanner.h": "Static device validator (no ARP sweep on ESP32)",
-       "liveness_engine.h": "ICMP ping via ESPping library",
-       "steam_detector.h": "Steam detection via port probe",
-       "web_ui.h": "HTML/JS UI with edit/delete device management"
-     },
-     "flow": "WiFi connect -> Web server starts -> Loop: check devices -> ping each -> determine winner -> set LED"
-   },
+    "architecture": {
+        "components": {
+            "main.py": "Entry point, GameStateController class, main loop with error recovery",
+            "scanner.py": "Network device discovery via ARP table + static list",
+            "config_manager.py": "Thread-safe singleton config loader with RLock",
+            "liveness.py": "ICMP ping validation via subprocess",
+            "steam_detector.py": "Steam detection via port probe or mDNS (zeroconf)",
+            "led_controller.py": "LED color management with factory pattern (FastLED/NeoPixel/RPi_WS281x)",
+            "web_config.py": "HTTP configuration UI with JSON editor and atomic writes"
+        },
+        "flow": "Scan ARP table -> Verify Liveness (ping) -> Check Steam port -> Determine Priority -> Set LED"
+    },
 
-   "detection": {
-     "methods": ["STATIC_LIST", "PORT_PROBE", "MDNS"],
-     "validation": "ICMP_Ping (ESPPing)",
-     "deep_sleep_handling": "Considered offline if ping fails",
-     "priority_logic": "Last online device wins",
-     "device_management": "Web UI with add/edit/delete via /api/device endpoints"
-   },
+    "detection": {
+        "methods": ["MAC_OUI", "STATIC_LIST", "PORT_PROBE", "MDNS"],
+        "validation": "ICMP_Ping via subprocess",
+        "deep_sleep_handling": "Considered offline if ping fails",
+        "priority_logic": "Last online device wins",
+        "device_management": "Web UI with JSON editor for static devices and colors"
+    },
 
-   "color_mapping": {
-     "sony": "blue",
-     "microsoft": "green",
-     "nintendo": "red",
-     "steam": "light_blue",
-     "nvidia": "light_green",
-     "default": "white"
-   },
+    "color_mapping": {
+        "sony": "blue",
+        "microsoft": "green",
+        "nintendo": "red",
+        "steam": "light_blue",
+        "nvidia": "light_green",
+        "default": "white"
+    },
 
-   "hardware": {
-     "led_pin": 13,
-     "num_leds": 30,
-     "brightness": 128
-   },
+    "web_config": {
+        "enabled_via_config": "config.json network.web_config_enabled",
+        "default_port": 80,
+        "endpoints": [
+            "GET / - Main configuration UI with JSON editor",
+            "POST /save - Save configuration (atomic write via tempfile)",
+            "Fields: network_scan_interval_seconds, network_detection_mode, devices_static_list, colors, hardware"
+        ],
+        "security_notes": [
+            "No authentication - only for trusted networks",
+            "Atomic writes prevent config corruption"
+        ]
+    },
 
-   "web_api": {
-     "endpoints": [
-       "GET / - Main configuration UI",
-       "POST /save - Add or update device (requires ip, brand, edit_mode, edit_idx)",
-       "POST /clear - Clear all devices",
-       "GET /api/devices - JSON list of all devices",
-       "GET /api/device?idx=N - JSON for single device (edit mode)",
-       "DELETE /api/device?idx=N - Delete device at index"
-     ]
-   },
+    "hardware": {
+        "supported_led_libraries": ["FASTLED", "NEOPIXEL", "RPI_WS281X"],
+        "config_fields": ["led_pin", "num_leds", "brightness"]
+    },
 
-   "firmware_features": {
-     "non_blocking_loop": "millis() based timing - web server always responsive",
-     "wifi_reconnect": "Auto-reconnect on WiFi disconnect",
-     "device_manager": "Full CRUD via web UI",
-     "mdns_responder": "ESP32 advertises as lightchanger-esp32.local"
-   },
+    "dependencies": {
+        "core": ["zeroconf>=4.2.0"],
+        "optional": [],
+        "installation": "pip install -r requirements.txt"
+    },
 
-   "current_phase": "Production",
-   "last_updated": "2026-05-11"
+    "current_phase": "Production",
+    "last_updated": "2026-05-12",
+    "changes": {
+      "bug_fixes": [
+        "conftest.py: removed non-existent SteamServiceListener import",
+        "esp32.ino: fixed DeviceConfig/Device type mismatch in NetworkScanner::isValidDevice call",
+        "esp32.ino: replaced blocking delay(1000) in WiFi reconnect with millis()-based non-blocking timer",
+        "steam_detector.h: reduced delay(100) to delay(10) between IP probes, added yield()",
+        "led_controller.py: removed unused 'import json'",
+        "requirements.txt: added zeroconf>=4.2.0 as required dependency"
+      ],
+      "improvements": [
+        "Created colors.py shared module with COLOR_MAP and BRAND_COLORS",
+        "main.py: imports BRAND_COLORS from colors.py instead of duplicating color map",
+        "config_manager.py: atomic writes using tempfile.mkstemp + os.replace in update()",
+        "Added @staticmethod decorator to LEDController._to_rgb()",
+        "Added .gitignore for build artifacts, IDE files, secrets",
+        "Added tests/__init__.py for proper pytest discovery",
+        "Added pytest>=7.0.0 to requirements.txt"
+      ]
+    }
 }

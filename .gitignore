@@ -1,0 +1,30 @@
+# Binary files
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ESP32 build artifacts
+/build/
+/tmp/
+*.tmp
+
+# Secrets / credentials
+.env
+secrets.env
+
+# Test coverage
+.coverage
+htmlcov/

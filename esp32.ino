@@ -28,15 +28,26 @@ const unsigned long scanInterval = SCAN_INTERVAL_MS;
 
 bool wifiConnected = false;
 
+bool wifiReconnecting = false;
+unsigned long wifiReconnectStart = 0;
+const unsigned long WIFI_RECONNECT_INTERVAL = 5000;
+
 void handleWiFiDisconnect() {
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("WiFi disconnected. Reconnecting...");
-        WiFi.disconnect(false);
-        delay(1000);
-        WiFi.begin(WIFI_SSID, WIFI_PASS);
-        lastScanTime = millis();
-      }
-   }
+     if (WiFi.status() != WL_CONNECTED) {
+         if (!wifiReconnecting) {
+             Serial.println("WiFi disconnected. Reconnecting...");
+             WiFi.disconnect(false);
+             wifiReconnectStart = millis();
+             wifiReconnecting = true;
+           }
+         if (millis() - wifiReconnectStart >= WIFI_RECONNECT_INTERVAL) {
+             WiFi.begin(WIFI_SSID, WIFI_PASS);
+             wifiReconnectStart = millis();
+           }
+       } else {
+         wifiReconnecting = false;
+       }
+    }
 
 Color getColorForBrand(String brand) {
     static std::map<String, Color> brandColors = {
@@ -162,7 +173,7 @@ void loop() {
         std::vector<String> currentlyActiveBrands;
 
         for (const auto& dev : configDevices) {
-             if (!NetworkScanner::isValidDevice({dev.ip, dev.brand})) continue;
+             if (!NetworkScanner::isValidDevice(Device{dev.ip, dev.brand})) continue;
              
              IPAddress ip;
              if (ip.fromString(dev.ip)) {

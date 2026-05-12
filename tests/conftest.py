@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from led_controller import LEDController, COLOR_MAP, Color
 from scanner import NetworkScanner
-from steam_detector import SteamDetector, SteamServiceListener
+from steam_detector import SteamDetector
 from liveness import LivenessEngine
 from config_manager import ConfigManager
 

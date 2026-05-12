@@ -105,8 +105,9 @@ class TestNeoPixelController:
     def test_init_saves_config(self, sample_config):
         config = dict(sample_config)
         config["hardware"]["led_library"] = "NEOPIXEL"
-        with pytest.raises(ImportError):
-            NeoPixelController(config)
+        controller = NeoPixelController(config)
+        assert controller.pin == 13
+        assert controller._neopixel_available is False
 
 
 class TestRPiLEDController:
@@ -115,8 +116,9 @@ class TestRPiLEDController:
     def test_init_saves_config(self, sample_config):
         config = dict(sample_config)
         config["hardware"]["led_library"] = "RPI_WS281X"
-        with pytest.raises(ImportError):
-            RPiLEDController(config)
+        controller = RPiLEDController(config)
+        assert controller.pin == 13
+        assert controller._rpi_available is False
 
 
 class TestGetLEDController:

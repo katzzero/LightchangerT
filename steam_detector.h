@@ -22,33 +22,37 @@ public:
                    }
                }
 
-             // 2. Port probe on active IPs
-            for (const auto& ip : activeIps) {
-                if (probePort(ip)) {
-                    return true;
-                  }
-                // Small delay between IPs to avoid overwhelming
-                delay(100);
-               }
+// 2. Port probe on active IPs
+             for (const auto& ip : activeIps) {
+                 if (probePort(ip)) {
+                     return true;
+                   }
+                 // Yield to keep WiFi/WebServer responsive
+                 delay(10);
+                }
            }
         return false;
       }
 
 private:
-    bool probePort(IPAddress ip) {
-        WiFiClient client;
-         int count = 0;
-        while (count < STEAM_TOTAL_PORTS) {
-            int port = STEAM_PORTS[count];
-            if (client.connect(ip, port)) {
-                client.stop();
-                return true;
-               }
-            delay(STEAM_PROBE_TIMEOUT_MS / STEAM_TOTAL_PORTS);
-            count++;
-           }
-        return false;
-      }
+bool probePort(IPAddress ip) {
+         WiFiClient client;
+          int count = 0;
+         while (count < STEAM_TOTAL_PORTS) {
+             int port = STEAM_PORTS[count];
+             if (client.connect(ip, port)) {
+                 client.stop();
+                 return true;
+                }
+             delay(STEAM_PROBE_TIMEOUT_MS / STEAM_TOTAL_PORTS);
+             count++;
+            }
+         return false;
+       }
+
+       void yield() {
+         delay(1);
+       }
 };
 
 #endif
