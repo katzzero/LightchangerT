@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
+from collections import namedtuple
 import logging
 
 logger = logging.getLogger(__name__)
+
+Color = namedtuple("Color", ["r", "g", "b"])
 
 # Color name to RGB mapping
 COLOR_MAP = {
@@ -53,27 +56,29 @@ class FastLEDController(LEDController):
         self.pin = config['hardware']['led_pin']
         self.num_leds = config['hardware']['num_leds']
         self.brightness = config['hardware'].get('brightness', 128)
+        self.strip = [0] * self.num_leds
+        self.fastled = None
 
         try:
             from FastLED import FastLED
             self.fastled = FastLED(self.pin, self.num_leds, data_format='GRB')
-            self.strip = [0] * self.num_leds
             logger.info(f"FastLED initialized on pin {self.pin} with {self.num_leds} LEDs")
         except ImportError:
             logger.error("FastLED library not installed. Run: pip install py-FastLED")
-            self.fastled = None
-            self.strip = []
 
     def set_color(self, color_name):
         rgb = self._to_rgb(color_name)
-        for i in range(self.num_leds):
-            self.strip[i] = (rgb[0], rgb[1], rgb[2])
+        if self.strip:
+            for i in range(self.num_leds):
+                self.strip[i] = (rgb[0], rgb[1], rgb[2])
         if self.fastled:
             self.fastled.setBrightness(self.brightness)
             self.fastled.setPixels(self.strip)
             self.fastled.show()
 
     def off(self):
+        if self.strip:
+            self.strip = [0] * self.num_leds
         if self.fastled:
             self.fastled.setBrightness(0)
             self.fastled.setPixels([0] * self.num_leds)
@@ -86,20 +91,22 @@ class NeoPixelController(LEDController):
         self.pin = config['hardware']['led_pin']
         self.num_leds = config['hardware']['num_leds']
         self.brightness = config['hardware'].get('brightness', 1.0)
+        self._neopixel_available = False
+        self.neopixels = None
 
         try:
             import neopixel
             self.neopixels = neopixel.NeoPixel(self.pin, self.num_leds, brightness=self.brightness, auto_write=False)
+            self._neopixel_available = True
             logger.info(f"NeoPixel initialized on pin {self.pin} with {self.num_leds} LEDs")
         except ImportError:
             logger.error("NeoPixel library not installed. Run: pip install adafruit-circuitpython-neopixel")
-            self.neopixels = None
 
     def set_color(self, color_name):
         rgb = self._to_rgb(color_name)
-        for i in range(self.num_leds):
-            self.neopixels[i] = rgb
         if self.neopixels:
+            for i in range(self.num_leds):
+                self.neopixels[i] = rgb
             self.neopixels.brightness = self.brightness
             self.neopixels.show()
 
@@ -115,22 +122,25 @@ class RPiLEDController(LEDController):
         self.pin = config['hardware']['led_pin']
         self.num_leds = config['hardware']['num_leds']
         self.brightness = config['hardware'].get('brightness', 200)
+        self._rpi_available = False
+        self.strip = None
+        self.PWM = None
 
         try:
             import rpi_ws281x
             self.PWM = rpi_ws281x
             self.strip = self.PWM.Strip(self.num_leds, self.pin, 800000, 7, False, 255, self.brightness, rpi_ws281x.GRB)
             self.strip.begin()
+            self._rpi_available = True
             logger.info(f"RPi_WS281X initialized on pin {self.pin} with {self.num_leds} LEDs")
         except ImportError:
             logger.error("rpi_ws281x library not installed. Run: pip install rpi_ws281x (Raspberry Pi only)")
-            self.strip = None
 
     def set_color(self, color_name):
         rgb = self._to_rgb(color_name)
-        for i in range(self.num_leds):
-            self.strip.setPixelColor(i, self.PWM.Color(rgb[0], rgb[1], rgb[2]))
         if self.strip:
+            for i in range(self.num_leds):
+                self.strip.setPixelColor(i, self.PWM.Color(rgb[0], rgb[1], rgb[2]))
             self.strip.show()
 
     def off(self):

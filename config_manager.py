@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 import threading
 import logging
 from pathlib import Path
@@ -60,13 +62,24 @@ class ConfigManager:
             return value if value is not None else default
 
     def update(self, updates: dict):
-        """Thread-safe config update."""
+        """Thread-safe config update with atomic writes."""
         with self._config_lock:
             if self._config is None:
                 self.load()
             self._config.update(updates)
-            with open(self._path, 'w') as f:
-                json.dump(self._config, f, indent=2)
+            # Atomic write: tempfile + os.replace to prevent corruption on crash
+            dir_name = os.path.dirname(self._path) or '.'
+            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(self._config, f, indent=2)
+                os.replace(tmp_path, self._path)
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
             logger.info("Configuration updated")
 
 

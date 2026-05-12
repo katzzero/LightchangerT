@@ -3,7 +3,7 @@ import threading
 import logging
 from scanner import NetworkScanner
 from liveness import LivenessEngine
-from led_controller import get_led_controller
+from led_controller import get_led_controller, COLOR_MAP
 from steam_detector import SteamDetector
 from web_config import run_server
 import json
@@ -24,16 +24,8 @@ class GameStateController:
         self.led = get_led_controller(self.config)
         self.steam = SteamDetector(self.config)
 
-        self.color_map = self.config.get('colors', {
-            "sony": "blue",
-            "microsoft": "green",
-            "nintendo": "red",
-            "steam": "light_blue",
-            "nvidia": "light_green",
-            "default": "white"
-        })
+        self.color_map = self.config.get('colors', COLOR_MAP)
 
-        
         # Stores { brand: last_seen_timestamp }
         self.last_seen = {}
 
