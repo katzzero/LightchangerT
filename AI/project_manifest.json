@@ -1,6 +1,6 @@
 {
     "project": "LightchangerT",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "description": "Network-based gaming console detection with LED color feedback on Raspberry Pi/Linux",
     "branch_type": "python",
     "platform": {
@@ -19,14 +19,14 @@
         ],
         "testing": [
             "python3 -m py_compile *.py",
-            "python3 -m unittest discover (when tests exist)"
+            "python3 -m pytest tests/ -v"
         ],
         "build": "Native Python - no build step required",
         "deploy": [
             "Copy files to target machine",
             "Set execution bit: chmod +x main.py",
             "Run manually: python3 main.py",
-            "Or as systemd service (see README.md)"
+            "Or as systemd service: systemctl start lightchanger (see lightchanger.service)"
         ]
     },
 
@@ -66,11 +66,12 @@
     "architecture": {
         "components": {
             "main.py": "Entry point, GameStateController class, main loop with error recovery",
+            "led_controller.py": "LED color management with factory pattern (FastLED/NeoPixel/RPi_WS281x)",
+            "colors.py": "Shared COLOR_MAP and Color namedtuple definitions",
             "scanner.py": "Network device discovery via ARP table + static list",
-            "config_manager.py": "Thread-safe singleton config loader with RLock",
+            "config_manager.py": "Thread-safe singleton config loader with RLock and atomic writes",
             "liveness.py": "ICMP ping validation via subprocess",
             "steam_detector.py": "Steam detection via port probe or mDNS (zeroconf)",
-            "led_controller.py": "LED color management with factory pattern (FastLED/NeoPixel/RPi_WS281x)",
             "web_config.py": "HTTP configuration UI with JSON editor and atomic writes"
         },
         "flow": "Scan ARP table -> Verify Liveness (ping) -> Check Steam port -> Determine Priority -> Set LED"
@@ -113,11 +114,36 @@
     },
 
     "dependencies": {
-        "core": [],
-        "optional": ["zeroconf (for mDNS Steam detection)"],
+        "core": ["zeroconf>=4.2.0"],
+        "optional": [],
+        "testing": ["pytest>=7.0.0"],
         "installation": "pip install -r requirements.txt"
     },
 
+    "deployment": {
+        "systemd_service": "lightchanger.service",
+        "install": "sudo cp lightchanger.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now lightchanger"
+    },
+
     "current_phase": "Production",
-    "last_updated": "2026-05-11"
+    "last_updated": "2026-05-12",
+    "changes": {
+        "bug_fixes": [
+            "conftest.py - removed non-existent SteamServiceListener import",
+            "esp32.ino - fixed DeviceConfig/Device type mismatch in isValidDevice call",
+            "esp32.ino - replaced blocking delay(1000) with millis() non-blocking WiFi reconnect",
+            "steam_detector.h - reduced delay(100) to delay(10) between IP probes",
+            "led_controller.py - removed unused import json, added module-level logger",
+            "requirements.txt - added zeroconf>=4.2.0 as required dependency"
+        ],
+        "improvements": [
+            "Created colors.py shared module with COLOR_MAP and Color namedtuple",
+            "main.py imports COLOR_MAP from colors.py instead of duplicating",
+            "config_manager.py uses atomic writes (tempfile.mkstemp + os.replace)",
+            "Added .gitignore, tests/__init__.py, pytest>=7.0.0 to requirements.txt",
+            "Added systemd service file (lightchanger.service)",
+            "Added CI workflow (.github/workflows/ci.yml) with py_compile, pytest, ESP32 compile",
+            "Expanded README with install, API docs, wiring guide, and CI documentation"
+        ]
+    }
 }

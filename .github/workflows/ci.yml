@@ -1,0 +1,70 @@
+name: LightchangerT CI
+
+on:
+  push:
+    branches: [main, esp32]
+  pull_request:
+    branches: [main, esp32]
+
+jobs:
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest zeroconf
+
+      - name: Syntax check
+        run: python3 -m py_compile *.py tests/*.py
+
+      - name: Run tests
+        run: python3 -m pytest tests/ -v --tb=short
+
+  esp32-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Arduino CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          sudo mv bin/arduino-cli /usr/local/bin/
+
+      - name: Install ESP32 platform
+        run: |
+          arduino-cli config init
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install FastLED@3.10.3
+          arduino-cli lib install ESPPing@1.0.5
+          arduino-cli lib install ESPmDNS@1.1.0
+
+      - name: Compile ESP32 firmware
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32 esp32.ino 2>&1 | tee compile.log
+
+  python-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint Python files
+        run: ruff check *.py tests/*.py || true

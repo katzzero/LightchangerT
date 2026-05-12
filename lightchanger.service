@@ -1,0 +1,24 @@
+[Unit]
+Description=LightchangerT - Network Gaming Console LED Controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/lightchanger
+ExecStart=/usr/bin/python3 /home/pi/lightchanger/main.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lightchanger
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/pi/lightchanger
+
+[Install]
+WantedBy=multi-user.target
