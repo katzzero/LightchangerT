@@ -1,32 +1,35 @@
 {
     "project": "LightchangerT",
-    "version": "2.2.0",
-    "description": "Network-based gaming console detection with LED color feedback on Raspberry Pi/Linux with remote ESP32 control",
-    "branch_type": "python",
+    "version": "2.3.0",
+    "description": "Network-based gaming console detection with LED color feedback on Raspberry Pi/Linux and ESP32",
+    "branch_type": "dual (Python + ESP32)",
     "platform": {
-        "primary": "Raspberry Pi",
-        "secondary": "General Linux SoC",
-        "language": "Python 3.8+",
-        "os_requirements": "Linux with arp, ping commands available"
+        "primary": "Raspberry Pi / Linux (Python 3.9+)",
+        "secondary": "ESP32 (Arduino framework)",
+        "language": ["Python 3.9+", "C++ (Arduino)"],
+        "os_requirements": "Linux with arp, ping commands available; ESP32 with Arduino framework"
     },
 
     "pipeline": {
         "setup": [
-            "Install Python 3.8+",
-            "Run: pip install -r requirements.txt (optional dependencies)",
-            "Configure config.json with network settings and LED hardware",
-            "Test: python3 main.py"
+            "Install Python 3.9+ and dependencies: pip install -r requirements.txt",
+            "For ESP32: install Arduino IDE or PlatformIO, add ESP32 board support",
+            "Install ESP32 libraries: FastLED 3.10.3, ESPing 1.0.5, ESPmDNS",
+            "Configure config.json (Python) or config.h (ESP32) with network settings",
+            "Test: python3 -m pytest tests/ -v",
+            "Test ESP32: arduino-cli compile --fqbn esp32:esp32:esp32 ."
         ],
         "testing": [
             "python3 -m py_compile *.py",
-            "python3 -m pytest tests/ -v"
+            "python3 -m pytest tests/ -v --tb=short",
+            "arduino-cli compile --fqbn esp32:esp32:esp32 . (CI validated)"
         ],
-        "build": "Native Python - no build step required",
+        "build": "Native Python - no build step; ESP32 compiles via Arduino CLI",
         "deploy": [
-            "Copy files to target machine",
-            "Set execution bit: chmod +x main.py",
-            "Run manually: python3 main.py",
-            "Or as systemd service: systemctl start lightchanger (see lightchanger.service)"
+            "Python: copy files to RPi, run python3 main.py or use systemd service",
+            "ESP32: upload via Arduino IDE, esptool.py, or OTA (ArduinoOTA on port 3232)",
+            "Systemd service: sudo cp lightchanger.service /etc/systemd/system/",
+            "sudo systemctl enable --now lightchanger"
         ]
     },
 
@@ -36,7 +39,8 @@
             "Each branch maintains independent implementation appropriate for its platform",
             "Feature parity is goal, not exact code parity",
             "Manifest updates should be mirrored to both branches",
-            "Detection logic (MAC_OUI, STATIC_LIST, PORT_PROBE, MDNS) should be consistent"
+            "Detection logic (MAC_OUI, STATIC_LIST, PORT_PROBE, MDNS) should be consistent",
+            "Remote command protocol (COLOR:, RGB:, OFF, STATUS?) is shared and versioned"
         ],
         "when_to_sync": [
             "Adding new device detection methods",
@@ -45,7 +49,7 @@
             "Adding new configuration options",
             "Fixing bugs that apply to both platforms",
             "UI/UX improvements to web config interface",
-            "Remote command channel protocol updates"
+            "Adding new command protocol verbs"
         ],
         "sync_process": {
             "step1": "Implement feature on originating branch",
@@ -65,36 +69,39 @@
     },
 
     "architecture": {
-        "components": {
-            "main.py": "Entry point, GameStateController, main loop with error recovery and optional ESP32 remote mirror",
-            "led_controller.py": "LED color management with factory pattern (FastLED/NeoPixel/RPi_WS281x)",
-            "colors.py": "Shared COLOR_MAP and Color namedtuple definitions",
-            "esp32_client.py": "TCP client for sending color commands to remote ESP32 (COLOR:name, RGB:r,g,b, OFF)",
+        "python_components": {
+            "main.py": "Entry point, GameStateController with optional ESP32 remote mirror",
             "scanner.py": "Network device discovery via ARP table + static list",
-            "config_manager.py": "Thread-safe singleton config loader with RLock and atomic writes",
+            "config_manager.py": "Thread-safe singleton with atomic writes and deep merge",
             "liveness.py": "ICMP ping validation via subprocess",
             "steam_detector.py": "Steam detection via port probe or mDNS (zeroconf)",
-            "web_config.py": "HTTP configuration UI with JSON editor and atomic writes"
+            "led_controller.py": "LED color management (FastLED/NeoPixel/RPi_WS281X) with _to_rgb()",
+            "web_config.py": "HTTP config UI with ConfigManager integration and ESP32 remote settings",
+            "esp32_client.py": "TCP client for remote ESP32 color commands",
+            "colors.py": "Shared COLOR_MAP, Color namedtuple, BRAND_COLORS"
         },
-        "flow": "Scan ARP table -> Verify Liveness (ping) -> Check Steam port -> Determine Priority -> Set LED [-> Mirror to ESP32 if configured]"
-    },
-
-    "remote_command": {
-        "description": "TCP-based one-shot command channel for remote ESP32 LED control",
-        "protocol": "Text-based, newline-delimited. Commands: COLOR:name, RGB:r,g,b, OFF, STATUS?",
-        "responses": "OK, ERR:UNKNOWN, ERR:INVALID_RGB, STATUS:state",
-        "default_port": 10001,
-        "config_section": "esp32_command in config.json",
-        "esp32_side": "config.h COMMAND_PORT_DEFAULT, config_manager.h get/setCommandPort(), esp32.ino WiFiServer on command port",
-        "python_side": "esp32_client.py Esp32CommandClient class"
+        "esp32_components": {
+            "esp32.ino": "Main sketch — non-blocking loop, command server, captive portal, AP/STA switching, OTA",
+            "config.h": "Hardware config, color definitions, OUI prefixes, Steam ports",
+            "config_manager.h": "NVS-persisted config (WiFi creds, devices, command port, scan interval, brightness, fail counter)",
+            "led_controller.h": "FastLED driver with CRGB color model",
+            "steam_detector.h": "Multi-port + mDNS Steam detection with retries",
+            "network_scanner.h": "Static device validator with IP format check",
+            "liveness_engine.h": "ICMP ping via ESPPing library",
+            "captive_portal.h": "AP mode setup portal with web form, NVS persistence",
+            "web_ui.h": "HTML/JS config UI with device management and command port settings",
+            "ota_fw_update.h": "ArduinoOTA firmware update support",
+            "basic_auth.h": "Session-based auth and CSRF token validation"
+        },
+        "flow": "Scan (ARP + static) -> Liveness (ping) -> Steam (port probe / mDNS) -> Priority (last online wins) -> LED color + optional ESP32 remote mirror"
     },
 
     "detection": {
         "methods": ["MAC_OUI", "STATIC_LIST", "PORT_PROBE", "MDNS"],
-        "validation": "ICMP_Ping via subprocess",
+        "validation": "ICMP_Ping via subprocess (Python) / ESPPing (ESP32)",
         "deep_sleep_handling": "Considered offline if ping fails",
-        "priority_logic": "Last online device wins",
-        "device_management": "Web UI with JSON editor for static devices and colors"
+        "priority_logic": "Last online device wins (timestamp-based)",
+        "device_management": "Web UI with JSON editor (Python) and REST API (ESP32)"
     },
 
     "color_mapping": {
@@ -106,68 +113,116 @@
         "default": "white"
     },
 
+    "remote_command_protocol": {
+        "transport": "TCP, one-shot connection per command, newline-delimited text",
+        "default_port": 10001,
+        "commands": {
+            "COLOR:<name>": "Set LED by named color (e.g. COLOR:blue)",
+            "RGB:<r>,<g>,<b>": "Set LED by RGB values 0-255 (e.g. RGB:255,0,0)",
+            "OFF": "Turn off LED strip",
+            "STATUS?": "Return current state",
+            "HELP": "List available commands"
+        },
+        "responses": {
+            "OK": "Command executed successfully",
+            "ERR:<reason>": "Error (e.g. ERR:INVALID_RGB, ERR:UNKNOWN)",
+            "STATUS:<state>": "Device state response"
+        },
+        "examples": [
+            "echo 'COLOR:blue' | nc 192.168.1.50 10001",
+            "echo 'RGB:255,128,0' | nc 192.168.1.50 10001",
+            "echo 'STATUS?' | nc 192.168.1.50 10001"
+        ]
+    },
+
     "web_config": {
-        "enabled_via_config": "config.json network.web_config_enabled",
-        "default_port": 80,
-        "endpoints": [
+        "python_enabled_via": "config.json network.web_config_enabled",
+        "python_default_port": 80,
+        "esp32_default_port": 80,
+        "endpoints_python": [
             "GET / - Main configuration UI with JSON editor",
-            "POST /save - Save configuration (atomic write via tempfile)",
+            "POST /save - Save configuration (atomic write)"
+        ],
+        "endpoints_esp32": [
+            "GET / - Web UI with device management and command port settings",
+            "POST /save - Add/edit device or set command port",
+            "POST /clear - Clear all devices",
+            "GET /api/devices - List all devices as JSON",
             "GET /api/config - Get command port setting",
-            "GET /api/devices - List all devices",
-            "GET /api/device?idx=N - Get device by index",
-            "DELETE /api/device?idx=N - Delete device by index",
-            "Fields: network_scan_interval_seconds, network_detection_mode, devices_static_list, colors, hardware, cmd_port"
+            "GET /api/device?idx=N - Get single device",
+            "DELETE /api/device?idx=N - Delete device"
         ],
         "security_notes": [
-            "No authentication - only for trusted networks",
-            "Atomic writes prevent config corruption"
+            "Basic auth available on ESP32 (credentials in NVS)",
+            "CSRF protection via time-based tokens (see CSRF_PROTECTION.md)",
+            "No TLS by default - use on trusted networks or behind HTTPS proxy"
         ]
     },
 
     "hardware": {
-        "supported_led_libraries": ["FASTLED", "NEOPIXEL", "RPI_WS281X"],
-        "config_fields": ["led_pin", "num_leds", "brightness"]
+        "python_supported_libraries": ["FastLED (sim)", "neopixel", "rpi_ws281x"],
+        "esp32_led_pin": 13,
+        "esp32_num_leds": 30,
+        "esp32_default_brightness": 128
+    },
+
+    "ota": {
+        "enabled": true,
+        "default_port": 3232,
+        "arduino_ota_lib": true,
+        "note": "OTA uses ArduinoOTA; authenticate before flashing in production"
+    },
+
+    "captive_portal": {
+        "ap_ssid": "Lightchanger-Setup",
+        "ap_password": "lightchanger",
+        "max_failed_attempts": 5,
+        "connect_timeout_ms": 15000
     },
 
     "dependencies": {
-        "core": ["zeroconf>=4.2.0"],
-        "optional": [],
-        "testing": ["pytest>=7.0.0"],
-        "installation": "pip install -r requirements.txt"
+        "python": {
+            "core": ["zeroconf>=4.2.0"],
+            "testing": ["pytest>=7.0.0"]
+        },
+        "esp32": {
+            "core": ["FastLED@3.10.3", "ESPping@1.0.5", "ESPmDNS", "WiFi", "WebServer", "Preferences"],
+            "optional": ["ArduinoOTA (built-in)"]
+        }
     },
 
-    "deployment": {
-        "systemd_service": "lightchanger.service",
-        "install": "sudo cp lightchanger.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now lightchanger"
+    "ci": {
+        "github_actions": true,
+        "python_versions": ["3.9", "3.10", "3.11", "3.12"],
+        "checks": ["py_compile", "flake8", "pytest", "arduino-cli compile"]
     },
 
     "current_phase": "Production",
-    "last_updated": "2026-05-12",
+    "last_updated": "2026-05-13",
     "changes": {
-        "bug_fixes": [
-            "conftest.py - removed non-existent SteamServiceListener import",
-            "esp32.ino - fixed DeviceConfig/Device type mismatch in isValidDevice call",
-            "esp32.ino - replaced blocking delay(1000) with millis() non-blocking WiFi reconnect",
-            "steam_detector.h - reduced delay(100) to delay(10) between IP probes",
-            "led_controller.py - removed unused import json, added module-level logger",
-            "requirements.txt - added zeroconf>=4.2.0 as required dependency"
+        "v2.3.0": [
+            "Added esp32_client.py for TCP remote color control of ESP32 from Python",
+            "Added dual-mode LED control in Python main.py (local + optional ESP32 mirror)",
+            "Added OTA firmware update support (ota_fw_update.h)",
+            "Added basic authentication framework for ESP32 web UI (basic_auth.h)",
+            "Added CSRF protection documentation (CSRF_PROTECTION.md)",
+            "Added captive portal to ESP32 with NVS-persisted WiFi credentials",
+            "Expanded test coverage: test_scanner.py, test_liveness.py, test_integration.py, test_esp32_client.py",
+            "Fixed config_manager.h with full NVS methods (WiFi, scan interval, brightness, fail counter)",
+            "Fixed config_manager.py with deep merge for nested dict updates",
+            "Updated web_config.py with ConfigManager integration and ESP32 remote settings",
+            "Updated esp32.ino with non-blocking WiFi reconnect, OTA, auth, and captive portal",
+            "Updated project manifest v2.3.0 with remote_command and ota documentation",
+            "Added CI workflow (.github/workflows/ci.yml) with Arduino CLI compile",
+            "Updated README.md with full API docs and remote control protocol",
+            "Added lightchanger.service systemd unit for RPi deployment"
         ],
-        "improvements": [
-            "Created colors.py shared module with COLOR_MAP and Color namedtuple",
-            "main.py imports COLOR_MAP from colors.py instead of duplicating",
-            "config_manager.py uses atomic writes (tempfile.mkstemp + os.replace)",
-            "Added .gitignore, tests/__init__.py, pytest>=7.0.0 to requirements.txt",
-            "Added systemd service file (lightchanger.service)",
-            "Added CI workflow (.github/workflows/ci.yml) with py_compile, pytest, ESP32 compile",
-            "Expanded README with install, API docs, wiring guide, and CI documentation"
-        ],
-        "new_features_v2.2": [
-            "Remote ESP32 command channel via TCP (esp32_client.py + esp32.ino commandServer)",
-            "Protocol: COLOR:name, RGB:r,g,b, OFF, STATUS? - one-shot TCP, newline-delimited",
-            "Web UI command port setting with NVS persistence and reboot warning",
-            "Optional dual-mode: local LED + remote ESP32 mirror via esp32_command config",
-            "config_manager.h: getCommandPort/setCommandPort with NVS storage",
-            "config.json: esp32_command section (enabled, host, port)"
+        "v2.2.0": [
+            "Fixed 11 bugs across both branches",
+            "Created colors.py shared module",
+            "Added atomic writes to config_manager.py",
+            "Restructured project with python/ directory",
+            "28/28 pytest tests passing"
         ]
     }
 }

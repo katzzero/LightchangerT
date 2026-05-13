@@ -150,6 +150,11 @@ def get_led_controller(config):
         raise ValueError(f"Unsupported LED library: {lib}")
 
 
+def _to_rgb(color):
+    """Module-level convenience function matching LEDController._to_rgb behavior."""
+    return LEDController._to_rgb(None, color)
+
+
 if __name__ == "__main__":
     import json
     with open("config.json", 'r') as f:

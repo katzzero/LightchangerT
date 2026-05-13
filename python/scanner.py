@@ -30,7 +30,7 @@ class NetworkScanner:
 
         for brand, prefixes in self.oui_prefixes.items():
             for prefix in prefixes:
-                if mac.startswith(prefix.lower()):
+                if mac.lower().startswith(prefix.lower()):
                     return brand
         return None
 
