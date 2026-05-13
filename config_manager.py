@@ -1,10 +1,26 @@
 import json
 import threading
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 CONFIG_FILE = "config.json"
 logger = logging.getLogger(__name__)
+
+
+def _deep_merge(base: dict, updates: dict) -> dict:
+    """
+    Recursively merge updates into base. Returns a new dict.
+    Nested dicts are merged; non-dict values are overwritten.
+    """
+    result = dict(base)
+    for key, value in updates.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
 
 
 class ConfigManager:
@@ -60,11 +76,15 @@ class ConfigManager:
             return value if value is not None else default
 
     def update(self, updates: dict):
-        """Thread-safe config update with atomic writes."""
+        """
+        Thread-safe config update with atomic writes.
+        Supports nested dict merging (e.g. update({'network': {'scan_interval_seconds': 10}})
+        will only change that one key, not overwrite the entire 'network' dict).
+        """
         with self._config_lock:
             if self._config is None:
                 self.load()
-            self._config.update(updates)
+            self._config = _deep_merge(self._config, updates)
             # Atomic write: tempfile + os.replace to prevent corruption on crash
             dir_name = os.path.dirname(self._path) or '.'
             fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')

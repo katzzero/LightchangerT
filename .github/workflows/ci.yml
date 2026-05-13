@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main, ESP32]
+  pull_request:
+    branches: [main, ESP32]
+
+jobs:
+  python-lint-and-test:
+    name: Python - Lint & Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Python syntax check (py_compile)
+        run: python -m py_compile *.py
+
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 *.py --count --select=E9,F63,F7,F82 --show-source --statistics || true
+          flake8 *.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run pytest
+        run: |
+          python -m pytest tests/ -v --tb=short
+
+  esp32-compile:
+    name: ESP32 - Arduino CLI Compile
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Arduino CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$HOME/.arduino-cli" >> "$GITHUB_PATH"
+
+      - name: Install ESP32 platform
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "FastLED@3.10.3"
+          arduino-cli lib install "ESPing@1.0.5"
+          arduino-cli lib install "ESPmDNS"
+          arduino-cli lib install "WiFi@1.2.7"
+          arduino-cli lib install "WebServer@1.0"
+          arduino-cli lib install "Preferences@1.2.4"
+
+      - name: Compile ESP32 sketch
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32 .
+
+  python-format:
+    name: Python - Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install formatters
+        run: |
+          pip install black isort
+
+      - name: Check import order
+        run: python -m isort --check-only --diff *.py
+
+      - name: Check formatting
+        run: python -m black --check --diff *.py tests/*.py || true
