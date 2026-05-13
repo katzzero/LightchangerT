@@ -23,7 +23,7 @@ class ConfigManager:
                     cls._instance._path = CONFIG_FILE
         return cls._instance
 
-    def load(self, config_path: str = None) -> dict:
+    def load(self, config_path=None):
         """Thread-safe config loading."""
         if config_path:
             self._path = config_path
@@ -41,11 +41,11 @@ class ConfigManager:
                 logger.error(f"Invalid JSON in config file: {e}")
                 raise
 
-    def reload(self) -> dict:
+    def reload(self):
         """Thread-safe config reload."""
         return self.load()
 
-    def get(self, key: str = None, default=None):
+    def get(self, key=None, default=None):
         """Get config value by key path (e.g., 'network.scan_interval_seconds')."""
         with self._config_lock:
             if self._config is None:
@@ -61,7 +61,7 @@ class ConfigManager:
                     return default
             return value if value is not None else default
 
-    def update(self, updates: dict):
+    def update(self, updates):
         """Thread-safe config update with atomic writes."""
         with self._config_lock:
             if self._config is None:
@@ -83,5 +83,11 @@ class ConfigManager:
             logger.info("Configuration updated")
 
 
-def get_config_manager() -> ConfigManager:
+def get_config_manager():
     return ConfigManager()
+
+
+if __name__ == "__main__":
+    cm = get_config_manager()
+    config = cm.load()
+    print("Loaded config:", json.dumps(config, indent=2))

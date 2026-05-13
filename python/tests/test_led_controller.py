@@ -2,7 +2,8 @@ import sys
 import os
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure python/ is on the path
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'python'))
 
 from led_controller import (
     LEDController, Color, FastLEDController,
@@ -12,15 +13,13 @@ from led_controller import (
 
 
 class TestColorMap:
-    """Tests for the COLOR_MAP constant."""
-
     def test_contains_all_basics(self):
         for color in ["blue", "green", "red", "white", "black"]:
-            assert color in COLOR_MAP, f"Missing basic color: {color}"
+            assert color in COLOR_MAP
 
     def test_contains_gaming_colors(self):
         for color in ["light_blue", "light_green"]:
-            assert color in COLOR_MAP, f"Missing gaming color: {color}"
+            assert color in COLOR_MAP
 
     def test_white_is_rgb(self):
         assert COLOR_MAP["white"] == (255, 255, 255)
@@ -33,8 +32,6 @@ class TestColorMap:
 
 
 class TestMockLED:
-    """Basic test to verify the testing fixture works."""
-
     def test_mock_sets_color(self, mock_led):
         mock_led.set_color("blue")
         assert mock_led.last_color == "blue"
@@ -45,8 +42,6 @@ class TestMockLED:
 
 
 class TestToRGB:
-    """Tests for the _to_rgb method on base class."""
-
     def test_named_color(self):
         result = LEDController._to_rgb(None, "white")
         assert result == (255, 255, 255)
@@ -75,8 +70,6 @@ class TestToRGB:
 
 
 class TestFastLEDController:
-    """Tests for FastLED controller."""
-
     def test_init_saves_config(self, sample_config):
         controller = FastLEDController(sample_config)
         assert controller.pin == 13
@@ -95,13 +88,10 @@ class TestFastLEDController:
     def test_set_color_without_library(self, sample_config):
         controller = FastLEDController(sample_config)
         controller.set_color("blue")
-        # strip should be set even without library
         assert controller.strip[0] == (0, 0, 255)
 
 
 class TestNeoPixelController:
-    """Tests for NeoPixel controller."""
-
     def test_init_saves_config(self, sample_config):
         config = dict(sample_config)
         config["hardware"]["led_library"] = "NEOPIXEL"
@@ -111,8 +101,6 @@ class TestNeoPixelController:
 
 
 class TestRPiLEDController:
-    """Tests for RPi WS281X controller."""
-
     def test_init_saves_config(self, sample_config):
         config = dict(sample_config)
         config["hardware"]["led_library"] = "RPI_WS281X"
@@ -122,8 +110,6 @@ class TestRPiLEDController:
 
 
 class TestGetLEDController:
-    """Tests for the factory function get_led_controller."""
-
     def test_fastled(self, sample_config):
         controller = get_led_controller(sample_config)
         assert isinstance(controller, FastLEDController)
@@ -154,8 +140,6 @@ class TestGetLEDController:
 
 
 class TestIntegration:
-    """Integration-like tests that check color mapping end-to-end."""
-
     def test_blue_color_applied_to_strip(self, sample_config):
         controller = FastLEDController(sample_config)
         controller.set_color("blue")

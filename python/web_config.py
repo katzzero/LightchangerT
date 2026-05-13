@@ -1,7 +1,7 @@
 import json
 import os
-import logging
 import tempfile
+import logging
 from urllib.parse import parse_qs
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -59,19 +59,19 @@ HTML_TEMPLATE = """
 </html>
 """
 
+
 class ConfigRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
-            
-            # Format data for template
+
             scan_interval = config.get('network', {}).get('scan_interval_seconds', 30)
             mode = config.get('network', {}).get('detection_mode', 'HYBRID')
             static_devices = json.dumps(config.get('devices', {}).get('static_list', []), indent=2)
             colors = json.dumps(config.get('colors', {}), indent=2)
             hardware = json.dumps(config.get('hardware', {}), indent=2)
-            
+
             html = HTML_TEMPLATE % {
                 "scan_interval": scan_interval,
                 "mode_hybrid": "selected" if mode == "HYBRID" else "",
@@ -82,7 +82,7 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
                 "hardware": hardware.replace("<", "&lt;").replace(">", "&gt;"),
                 "message": "Current Configuration Loaded"
             }
-            
+
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
@@ -98,15 +98,12 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length).decode('utf-8')
 
             try:
-                # Parse form data properly using urllib.parse
                 params = parse_qs(post_data, keep_blank_values=True)
-                # parse_qs returns lists, get first value
                 params = {k: v[0] if v else '' for k, v in params.items()}
 
                 with open(CONFIG_FILE, 'r+') as f:
                     config = json.load(f)
 
-                 # Update config with validation
                 if 'network_scan_interval_seconds' in params:
                     try:
                         val = int(params['network_scan_interval_seconds'])
@@ -129,7 +126,6 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
                 if 'hardware' in params:
                     config['hardware'] = json.loads(params['hardware'])
 
-                 # Atomic write: write to temp file then rename
                 dir_name = os.path.dirname(CONFIG_FILE) or '.'
                 fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
                 try:
@@ -153,11 +149,13 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(f"Error saving config: {e}".encode())
 
+
 def run_server(port=80):
     server_address = ('', port)
     httpd = HTTPServer(server_address, ConfigRequestHandler)
     logger.info(f"Web Config Server started on port {port}")
     httpd.serve_forever()
+
 
 if __name__ == '__main__':
     run_server()

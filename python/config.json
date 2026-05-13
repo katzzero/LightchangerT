@@ -1,6 +1,4 @@
 {
-  "python_folder": "python/",
-  "esp32_folder": "esp32/",
   "colors": {
     "sony": "blue",
     "microsoft": "green",

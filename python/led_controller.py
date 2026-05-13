@@ -1,21 +1,11 @@
 from abc import ABC, abstractmethod
-from collections import namedtuple
 import logging
+
+from colors import COLOR_MAP, Color
 
 logger = logging.getLogger(__name__)
 
-Color = namedtuple("Color", ["r", "g", "b"])
-
-# Color name to RGB mapping
-COLOR_MAP = {
-    "blue": (0, 0, 255),
-    "green": (0, 255, 0),
-    "red": (255, 0, 0),
-    "light_blue": (0, 191, 255),
-    "light_green": (144, 238, 144),
-    "white": (255, 255, 255),
-    "black": (0, 0, 0),
-}
+COLOR_MAP_LEGACY = COLOR_MAP
 
 
 class LEDController(ABC):
@@ -37,7 +27,6 @@ class LEDController(ABC):
         if color_name in COLOR_MAP:
             return COLOR_MAP[color_name]
 
-        # Try parsing as hex (#RRGGBB or RRGGBB)
         if isinstance(color_name, str):
             if color_name.startswith("#"):
                 color_name = color_name[1:]
@@ -68,9 +57,8 @@ class FastLEDController(LEDController):
 
     def set_color(self, color_name):
         rgb = self._to_rgb(color_name)
-        if self.strip:
-            for i in range(self.num_leds):
-                self.strip[i] = (rgb[0], rgb[1], rgb[2])
+        for i in range(self.num_leds):
+            self.strip[i] = (rgb[0], rgb[1], rgb[2])
         if self.fastled:
             self.fastled.setBrightness(self.brightness)
             self.fastled.setPixels(self.strip)

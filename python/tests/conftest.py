@@ -1,18 +1,12 @@
 import os
 import sys
-import json
-import tempfile
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure python/ is on the path
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'python'))
 
-from led_controller import LEDController, COLOR_MAP
-from scanner import NetworkScanner
-from steam_detector import SteamDetector
-from liveness import LivenessEngine
-from config_manager import ConfigManager
+from led_controller import LEDController, Color, FastLEDController, NeoPixelController, RPiLEDController, COLOR_MAP, get_led_controller
 
-# --- Fixtures ---
 
 @pytest.fixture
 def sample_config():
@@ -60,7 +54,6 @@ def sample_config():
 
 
 class MockLEDController(LEDController):
-    """Mock LED controller that stores last color for testing."""
     def __init__(self, config=None):
         self.last_color = None
         self.off_called = False
@@ -75,5 +68,3 @@ class MockLEDController(LEDController):
 @pytest.fixture
 def mock_led():
     return MockLEDController()
-
-# --- Fixtures end ---

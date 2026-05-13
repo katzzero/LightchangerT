@@ -1,10 +1,10 @@
 import json
-import os
 import subprocess
 import re
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 class NetworkScanner:
     def __init__(self, config_path="config.json"):
@@ -18,7 +18,6 @@ class NetworkScanner:
         """Retrieves MAC address for a given IP using the arp command."""
         try:
             output = subprocess.check_output(["arp", "-a", ip], stderr=subprocess.STDOUT).decode()
-            # Match MAC address pattern (xx:xx:xx:xx:xx:xx)
             match = re.search(r"([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})", output)
             return match.group(0).lower() if match else None
         except subprocess.CalledProcessError:
@@ -28,8 +27,7 @@ class NetworkScanner:
         """Matches a MAC address against OUI prefixes defined in config."""
         if not mac:
             return None
-        
-        # Check against OUI prefixes
+
         for brand, prefixes in self.oui_prefixes.items():
             for prefix in prefixes:
                 if mac.startswith(prefix.lower()):
@@ -39,27 +37,27 @@ class NetworkScanner:
     def scan(self):
         """
         Performs a network scan.
-        In a real implementation, this would use scapy or nmap.
-        Here we simulate discovery based on static list and local cache.
+        Uses static list + ARP table for device discovery.
         """
         seen_ips = set()
         discovered = []
 
         # 1. Check Static List first
         for dev in self.static_devices:
+            if dev['ip'] in seen_ips:
+                continue
             seen_ips.add(dev['ip'])
             discovered.append({
                 "ip": dev['ip'],
-                "mac": dev['mac'],
+                "mac": dev.get('mac', ''),
                 "brand": dev['brand']
             })
 
-        # 2. Dynamic discovery (Simulated via ARP table for this build phase)
+        # 2. Dynamic discovery via ARP table
         try:
             arp_output = subprocess.check_output(["arp", "-a"]).decode()
             lines = arp_output.split('\n')
             for line in lines:
-                # Extract IP and MAC
                 parts = re.findall(r"(\d+\.\d+\.\d+\.\d+).*?([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})", line)
                 if parts:
                     ip = parts[0][0]
@@ -74,6 +72,7 @@ class NetworkScanner:
             logger.error(f"Scanning error: {e}")
 
         return discovered
+
 
 if __name__ == "__main__":
     scanner = NetworkScanner()

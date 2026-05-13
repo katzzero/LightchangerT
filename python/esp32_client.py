@@ -1,5 +1,4 @@
 import socket
-import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,10 +8,10 @@ class Esp32CommandClient:
     """TCP client for sending color commands to an ESP32 remote device.
 
     Protocol (text-based, one-shot TCP):
-        COLOR:<name>\\n  - Set color by name (e.g., COLOR:blue)
-        RGB:<r>,<g>,<b>\\n  - Set color by RGB values
-        OFF\\n            - Turn off LED
-        STATUS?\\n        - Query current status
+        COLOR:<name>\n  - Set color by name (e.g., COLOR:blue)
+        RGB:<r>,<g>,<b>\n  - Set color by RGB values
+        OFF\n            - Turn off LED
+        STATUS?\n        - Query current status
 
     Responses:
         OK                - Command executed
