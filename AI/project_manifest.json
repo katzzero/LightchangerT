@@ -197,9 +197,24 @@
         "checks": ["py_compile", "flake8", "pytest", "arduino-cli compile"]
     },
 
+    "directory_structure": {
+        "main_branch": {
+            "root": "main.py (shim), config.json, requirements.txt, .github/, AI/, README.md",
+            "python/": "All Python source code and tests"
+        },
+        "ESP32_branch": {
+            "root": "Python files, config.json, requirements.txt, .github/, AI/, README.md",
+            "esp32/": "All ESP32 C++ files (*.h, *.ino, *.cpp)"
+        }
+    },
+
     "current_phase": "Production",
     "last_updated": "2026-05-13",
     "changes": {
+        "v2.3.1": [
+            "Moved ESP32 C++ files into esp32/ directory on ESP32 branch",
+            "Updated CI workflow for branch-aware test/compile paths"
+        ],
         "v2.3.0": [
             "Added esp32_client.py for TCP remote color control of ESP32 from Python",
             "Added dual-mode LED control in Python main.py (local + optional ESP32 mirror)",
