@@ -16,6 +16,9 @@ const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
 const int SCAN_INTERVAL_MS = 30000;
 const int OFFLINE_THRESHOLD = 3;
 
+// Remote Command Configuration
+const int COMMAND_PORT_DEFAULT = 10001;  // TCP port for remote color commands (change requires reboot)
+
 // Color Mapping (RGB)
 struct Color {
     uint8_t r, g, b;
@@ -28,6 +31,11 @@ const Color COLOR_STEAM = {0, 191, 255};      // Light Blue
 const Color COLOR_NVIDIA = {144, 238, 144};   // Light Green
 const Color COLOR_DEFAULT = {255, 255, 255};  // White
 
+// Brand color lookup table for remote commands
+const int NUM_BRAND_COLORS = 6;
+const char* BRAND_NAMES[] = {"sony", "microsoft", "nintendo", "steam", "nvidia", "default"};
+const Color BRAND_COLORS[] = {COLOR_SONY, COLOR_MICROSOFT, COLOR_NINTENDO, COLOR_STEAM, COLOR_NVIDIA, COLOR_DEFAULT};
+
 // MAC OUI Prefixes
 struct VendorOUI {
     const char* brand;
@@ -35,26 +43,26 @@ struct VendorOUI {
 };
 
 const std::vector<VendorOUI> SONY_OUIS = {
-    {"sony", "00:04:1F"}, {"sony", "00:13:15"}, {"sony", "00:1F:A7"}, 
+    {"sony", "00:04:1F"}, {"sony", "00:13:15"}, {"sony", "00:1F:A7"},
     {"sony", "0C:FE:45"}, {"sony", "28:40:DD"}, {"sony", "BC:33:29"}, {"sony", "98:FA:2E"}
 };
 
 const std::vector<VendorOUI> MSFT_OUIS = {
-    {"microsoft", "00:0D:3A"}, {"microsoft", "00:12:5A"}, {"microsoft", "00:15:5D"}, 
+    {"microsoft", "00:0D:3A"}, {"microsoft", "00:12:5A"}, {"microsoft", "00:15:5D"},
     {"microsoft", "00:17:FA"}, {"microsoft", "50:1A:C5"}, {"microsoft", "28:18:78"}, {"microsoft", "60:45:BD"}
 };
 
 const std::vector<VendorOUI> NINT_OUIS = {
-    {"nintendo", "00:09:BF"}, {"nintendo", "00:16:56"}, {"nintendo", "00:1A:E9"}, 
-    {"nintendo", "00:1B:7A"}, {"nintendo", "00:1C:BE"}, {"nintendo", "00:1E:A9"}, 
-    {"nintendo", "00:21:BD"}, {"nintendo", "00:24:F3"}, {"nintendo", "34:AF:2C"}, 
-    {"nintendo", "E8:4E:CE"}, {"nintendo", "CC:FB:65"}, {"nintendo", "58:BD:A3"}, 
-    {"nintendo", "70:48:F7"}, {"nintendo", "70:F0:88"}, {"nintendo", "74:84:69"}, 
+    {"nintendo", "00:09:BF"}, {"nintendo", "00:16:56"}, {"nintendo", "00:1A:E9"},
+    {"nintendo", "00:1B:7A"}, {"nintendo", "00:1C:BE"}, {"nintendo", "00:1E:A9"},
+    {"nintendo", "00:21:BD"}, {"nintendo", "00:24:F3"}, {"nintendo", "34:AF:2C"},
+    {"nintendo", "E8:4E:CE"}, {"nintendo", "CC:FB:65"}, {"nintendo", "58:BD:A3"},
+    {"nintendo", "70:48:F7"}, {"nintendo", "70:F0:88"}, {"nintendo", "74:84:69"},
     {"nintendo", "74:F9:CA"}, {"nintendo", "98:B6:E9"}, {"nintendo", "A4:C0:E1"}, {"nintendo", "1C:45:86"}
 };
 
 const std::vector<VendorOUI> NVDA_OUIS = {
-    {"nvidia", "00:04:4B"}, {"nvidia", "3C:6D:66"}, {"nvidia", "48:B0:2D"}, 
+    {"nvidia", "00:04:4B"}, {"nvidia", "3C:6D:66"}, {"nvidia", "48:B0:2D"},
     {"nvidia", "4C:BB:47"}, {"nvidia", "74:25:54"}, {"nvidia", "AC:3A:E2"}, {"nvidia", "C4:70:BD"}
 };
 

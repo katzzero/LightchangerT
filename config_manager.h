@@ -4,6 +4,7 @@
 #include <Preferences.h>
 #include <IPAddress.h>
 #include <vector>
+#include "config.h"
 
 struct DeviceConfig {
     String ip;
@@ -14,18 +15,19 @@ class ConfigManager {
 private:
     Preferences prefs;
     const char* NVS_NAMESPACE = "lightchanger";
+    const uint16_t CMD_PORT_DEFAULT = COMMAND_PORT_DEFAULT;
 
 public:
     void begin() {
         prefs.begin(NVS_NAMESPACE, false);
-     }
+    }
 
     void addDevice(String ip, String brand) {
-         // Format: ip|brand;
+        // Format: ip|brand;
         String current = prefs.getString("devices", "");
         current += ip + "|" + brand + ";";
         prefs.putString("devices", current);
-     }
+    }
 
     std::vector<DeviceConfig> getDevices() {
         std::vector<DeviceConfig> deviceList;
@@ -42,25 +44,35 @@ public:
                 dev.ip = item.substring(0, sep);
                 dev.brand = item.substring(sep + 1);
                 deviceList.push_back(dev);
-             }
+            }
             start = end + 1;
             end = data.indexOf(';', start);
-         }
+        }
         return deviceList;
-     }
+    }
 
     void clearDevices() {
         prefs.remove("devices");
-     }
+    }
 
     void saveDevices(std::vector<DeviceConfig> devices) {
-         String result = "";
-        for (int i = 0; i < devices.size(); i++) {
-             if (i > 0) result += ";";
+        String result = "";
+        for (int i = 0; i < (int)devices.size(); i++) {
+            if (i > 0) result += ";";
             result += devices[i].ip + "|" + devices[i].brand;
-             }
+        }
         prefs.putString("devices", result);
-      }
+    }
+
+    uint16_t getCommandPort() {
+        return prefs.getShort("cmd_port", CMD_PORT_DEFAULT);
+    }
+
+    void setCommandPort(uint16_t port) {
+        if (port > 1000 && port < 65536) {
+            prefs.putShort("cmd_port", port);
+        }
+    }
 };
 
 #endif
