@@ -1,166 +1,210 @@
 # LightchangerT
 
-LightchangerT is a network-aware LED controller for gaming consoles. It detects when your gaming devices (PlayStation, Xbox, Nintendo Switch, Steam Deck, etc.) are online and changes the color of your LED strip accordingly.
+Network-aware LED controller for gaming consoles. Detects when your PlayStation, Xbox, Nintendo Switch, Steam Deck, or Nvidia Shield comes online and changes your LED strip's color accordingly.
 
 ## Features
 
-- **Multi-Platform Support**: Works on Raspberry Pi (Python) and ESP32 (C++).
-- **Deep Sleep Detection**: Uses ICMP ping verification to ensure devices are truly awake.
-- **Priority Logic**: The last device to come online controls the LED color.
-- **Web Configuration**: Optional built-in web interface to manage devices and colors without editing config files.
-- **Custom Colors**: Fully customizable RGB color mapping for each brand.
-- **Steam Detection**: Concurrent multi-port probing + mDNS with retry logic.
-- **Atomic Config Writes**: Prevents config corruption on unexpected shutdowns.
-- **Remote LED Control**: Send color commands to ESP32 over TCP from any device on the network.
+- **Dual platform**: Runs on Raspberry Pi (Python) or standalone on ESP32 (C++)
+- **Multi-detection**: Static IP list, MAC OUI lookup, ARP scan, port probe, mDNS
+- **Priority logic**: Last device to come online controls the LED color
+- **Deep sleep safe**: ICMP ping verification before lighting up
+- **Remote command**: Control ESP32 LEDs from another machine via TCP (`COLOR:blue`, `RGB:255,0,0`, `OFF`)
+- **Dual-mode LED**: Raspberry Pi can mirror colors to a remote ESP32 (optional)
+- **Captive portal**: Headless ESP32 setup — connect to "Lightchanger-Setup" AP, configure WiFi via browser
+- **OTA updates**: Flash new firmware to ESP32 over WiFi (ArduinoOTA, port 3232)
+- **Web UI**: Built-in configuration interface on both platforms
+- **CI tested**: 74 unit tests + Arduino CLI compile on every push
 
 ## Supported Platforms
 
-| Brand | Platform | Color |
-|-------|----------|-------|
-| Sony | PlayStation | Blue |
-| Microsoft | Xbox | Green |
-| Nintendo | Switch | Red |
-| Steam | Steam Deck / PC | Light Blue |
-| Nvidia | Shield | Light Green |
+| Brand     | Color      | Detection Methods                 |
+|-----------|------------|-----------------------------------|
+| Sony      | Blue       | Static IP, MAC OUI                |
+| Microsoft | Green      | Static IP, MAC OUI                |
+| Nintendo  | Red        | Static IP, MAC OUI                |
+| Steam     | Light Blue | Port probe (TCP 27015-27036), mDNS |
+| Nvidia    | Light Green| Static IP, MAC OUI                |
 
-## Installation
+## Directory Structure
 
-### Python (Raspberry Pi / Linux)
+```
+LightchangerT/
+├── main.py                 [main]   Python entry point (shim → python/main.py)
+├── config.json             [main]   Shared configuration
+├── python/                 [main]   All Python source code
+│   ├── main.py                      Main game loop
+│   ├── scanner.py                   ARP-based network discovery
+│   ├── liveness.py                  ICMP ping validation
+│   ├── steam_detector.py            Steam port probe + mDNS
+│   ├── led_controller.py            LED drivers (FastLED/NeoPixel/RPi_WS281X)
+│   ├── esp32_client.py              TCP client for remote ESP32 control
+│   ├── web_config.py                Web configuration UI
+│   ├── config_manager.py            Thread-safe singleton with atomic writes
+│   ├── colors.py                    COLOR_MAP + BRAND_COLORS
+│   └── tests/                       74 pytest tests
+├── esp32/                 [ESP32]   All C++ source code
+│   ├── esp32.ino                    Main sketch with OTA + command server
+│   ├── config.h                     Hardware & network configuration
+│   ├── config_manager.h             NVS-backed persistent settings
+│   ├── led_controller.h             FastLED driver
+│   ├── steam_detector.h             Multi-port Steam detection
+│   ├── network_scanner.h            Static device validator
+│   ├── liveness_engine.h            ESPPing ICMP check
+│   ├── captive_portal.h             AP mode setup with web form
+│   ├── web_ui.h                     HTML/JS configuration UI
+│   ├── ota_fw_update.h              ArduinoOTA firmware update
+│   ├── basic_auth.h                 Session auth + CSRF tokens
+│   └── main.cpp                     Legacy stub (replaced by esp32.ino)
+├── .github/workflows/ci.yml         CI pipeline (lint, test, compile)
+└── README.md
+```
 
-1. Clone the repository:
-   ```bash
-   git clone <repo-url>
-   cd LightchangerT
-   ```
+## Quick Start (Python)
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+git clone https://github.com/katzzero/LightchangerT.git
+cd LightchangerT
+pip install -r requirements.txt
+# Edit config.json with your network settings
+python3 main.py
+```
 
-3. Edit `config.json` with your network settings and LED hardware configuration.
+Enable the web UI in `config.json`:
+```json
+"web_config_enabled": true,
+"web_config_port": 8080
+```
 
-4. Test:
-   ```bash
-   python3 main.py
-   ```
+## Quick Start (ESP32)
 
-5. (Optional) Install as a systemd service:
-   ```bash
-   sudo cp lightchanger.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable lightchanger
-   sudo systemctl start lightchanger
-   sudo systemctl status lightchanger
-   ```
+### Option 1: Arduino CLI
+```bash
+cd LightchangerT
+arduino-cli compile --fqbn esp32:esp32:esp32 esp32/
+arduino-cli upload -p <PORT> --fqbn esp32:esp32:esp32 esp32/
+```
 
-### ESP32
+### Option 2: Arduino IDE
+1. Open `esp32/esp32.ino`
+2. Install libraries: FastLED 3.10.3, ESPing 1.0.5, ESPmDNS
+3. Select board: ESP32 Dev Module
+4. Upload
 
-1. Open the project in Arduino IDE or PlatformIO.
-2. Install dependencies via Library Manager:
-   - **FastLED** (3.10.3)
-   - **ESPping** (1.0.5)
-   - **ESPmDNS** (1.1.0)
-3. Edit `config.h` with your WiFi credentials and hardware settings.
-4. Upload to your ESP32 board.
+### First Boot (Captive Portal)
+1. ESP32 starts an AP named **Lightchanger-Setup** (password: `lightchanger`)
+2. Connect your phone/laptop to that WiFi
+3. Open http://lightchanger.local in a browser
+4. Enter your WiFi credentials and save
+5. ESP32 reboots into STA mode
 
-### Remote Control (Optional)
+### OTA Updates
+Once on WiFi, flash new firmware over the air:
+- Arduino IDE: Tools → Port → Network Ports → lightchanger-esp32
+- CLI: `arduino-cli upload --fqbn esp32:esp32:esp32 --port lightchanger-esp32.local`
 
-The ESP32 branch runs a TCP command server that accepts color commands from other devices on the network. Enable it in `config.json`:
+## Remote Command Protocol
+
+Control ESP32 LEDs from any machine on the network via TCP:
+
+| Command            | Description                    | Example                        |
+|--------------------|--------------------------------|--------------------------------|
+| `COLOR:<name>`    | Set LED by named color         | `COLOR:blue`                   |
+| `RGB:<r>,<g>,<b>` | Set LED by RGB values (0–255) | `RGB:255,0,0`                  |
+| `OFF`              | Turn off LED strip             | `OFF`                          |
+| `STATUS?`          | Query device state             | `STATUS?` → `STATUS:active`    |
+
+```bash
+echo 'COLOR:blue' | nc 192.168.1.50 10001
+echo 'RGB:255,0,0' | nc 192.168.1.50 10001
+```
+
+From Python:
+```python
+from esp32_client import ESP32Client
+client = ESP32Client("192.168.1.50", port=10001)
+client.set_color("blue")
+client.off()
+print(client.get_status())
+```
+
+## Dual-Mode (Python + ESP32)
+
+The Raspberry Pi can control local LEDs AND mirror colors to a remote ESP32 simultaneously:
 
 ```json
-"esp32_command": {
+{
+  "esp32_command": {
     "enabled": true,
     "host": "192.168.1.50",
-    "port": 10001
+    "port": 10001,
+    "timeout": 5
+  }
 }
 ```
 
-The Raspberry Pi will then mirror all detected color changes to the ESP32 via TCP in addition to controlling any local LEDs.
+## Configuration (config.json)
 
-## Configuration
-
-Edit `config.json` (Python) or `config.h` (ESP32) to:
-- Change the LED pin and count
-- Customize brand-to-color mapping
-- Set static device IPs and OUI prefixes
-- Enable the web configuration interface
-- Configure remote ESP32 control (Python branch)
-
-### Web Config (Python)
-
-To enable the web interface, set in `config.json`:
 ```json
-"web_config_enabled": true,
-"web_config_port": 80
+{
+  "hardware": {
+    "led_library": "FASTLED",
+    "led_pin": 13,
+    "num_leds": 30,
+    "brightness": 128
+  },
+  "network": {
+    "subnet": "192.168.1.0/24",
+    "scan_interval_seconds": 30,
+    "detection_mode": "HYBRID",
+    "web_config_enabled": false,
+    "web_config_port": 8080
+  },
+  "devices": {
+    "static_list": [
+      {"ip": "192.168.1.10", "mac": "AA:BB:CC:DD:EE:FF", "brand": "sony"}
+    ],
+    "steam_detection": {
+      "method": "PORT_PROBE",
+      "port": 27036
+    }
+  },
+  "colors": {
+    "sony": "blue",
+    "microsoft": "green",
+    "nintendo": "red",
+    "steam": "light_blue",
+    "nvidia": "light_green",
+    "default": "white"
+  },
+  "esp32_command": {
+    "enabled": false,
+    "host": "192.168.1.50",
+    "port": 10001
+  }
+}
 ```
 
-Then restart the application. Access `http://<raspberry-pi-ip>` in your browser.
+## Web UI Endpoints (ESP32)
 
-### Remote Command Port (ESP32)
+| Method | Path              | Description                |
+|--------|-------------------|----------------------------|
+| GET    | `/`               | Configuration page          |
+| POST   | `/save`           | Add/edit device or set port |
+| POST   | `/clear`          | Clear all devices           |
+| GET    | `/api/devices`    | List devices as JSON        |
+| GET    | `/api/config`     | Get command port setting    |
+| GET    | `/api/device?idx=N` | Get single device         |
+| DELETE | `/api/device?idx=N` | Delete device            |
 
-Set the TCP port in the web config UI under the "Remote Command Port" section. Default is 10001. **A reboot is required after changing the port.**
+## Testing
 
-### Web API Endpoints (ESP32)
+```bash
+# Python (74 tests)
+pytest python/tests/ -v
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Main configuration UI |
-| GET | `/api/devices` | List all devices as JSON |
-| GET | `/api/device?idx=N` | Get device at index N |
-| DELETE | `/api/device?idx=N` | Delete device at index N |
-| GET | `/api/config` | Get command port setting |
-| POST | `/save` | Save device (params: `ip`, `brand`) or `cmd_port` |
-| POST | `/clear` | Clear all devices |
-
-### Remote Command Protocol
-
-Send text commands over TCP to the ESP32's command port. Each command is terminated with a newline (`\n`). One-shot connections — connect, send one command, receive response, disconnect.
-
-| Command | Example | Response |
-|---------|---------|----------|
-| Set color by name | `COLOR:blue\n` | `OK` |
-| Set color by RGB | `RGB:255,0,0\n` | `OK` |
-| Turn off | `OFF\n` | `OK` |
-| Query status | `STATUS?\n` | `STATUS:active` |
-| Unknown | anything | `ERR:UNKNOWN` |
-
-## Hardware Wiring
-
-- **WS2812B / NeoPixel**: Data pin → GPIO13 (default), 5V and GND connected
-- Ensure a **330Ω resistor** on the data line and a **1000µF capacitor** across power for stable operation.
-
-## Architecture
-
+# ESP32 compile check
+arduino-cli compile --fqbn esp32:esp32:esp32 esp32/
 ```
-Scan ARP table
-    → Verify Liveness (ping)
-    → Check Steam port (mDNS + TCP)
-    → Determine Priority (last online wins)
-    → Set LED (local)
-    → Mirror to ESP32 via TCP (if configured)
-```
-
-### Components
-
-| File | Purpose |
-|------|---------|
-| `main.py` | Entry point, GameStateController, main loop |
-| `esp32_client.py` | TCP client for remote ESP32 control |
-| `led_controller.py` | LED drivers (FastLED/NeoPixel/RPi_WS281X) |
-| `colors.py` | Shared color definitions |
-| `scanner.py` | Network device discovery (ARP + static list) |
-| `config_manager.py` | Thread-safe singleton config management |
-| `liveness.py` | ICMP ping device validation |
-| `steam_detector.py` | Steam detection (ports + mDNS) |
-| `web_config.py` | HTTP web configuration UI |
-
-## CI
-
-GitHub Actions runs on every push/PR:
-- **Python**: syntax check + pytest suite
-- **ESP32**: Arduino CLI compilation
-- **Format**: ruff linting
 
 ## License
 
