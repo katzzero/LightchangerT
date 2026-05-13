@@ -1,12 +1,14 @@
 import time
 import threading
 import logging
+import json
 from scanner import NetworkScanner
 from liveness import LivenessEngine
-from led_controller import get_led_controller, COLOR_MAP
+from led_controller import get_led_controller
+from colors import BRAND_COLORS as COLOR_MAP
 from steam_detector import SteamDetector
 from web_config import run_server
-import json
+from esp32_client import get_esp32_client
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,6 +28,11 @@ class GameStateController:
 
         self.color_map = self.config.get('colors', COLOR_MAP)
 
+        # Remote ESP32 control (optional)
+        self.esp32 = get_esp32_client(self.config)
+        if self.esp32:
+            logger.info(f"ESP32 remote control enabled: {self.esp32.host}:{self.esp32.port}")
+
         # Stores { brand: last_seen_timestamp }
         self.last_seen = {}
 
@@ -35,7 +42,7 @@ class GameStateController:
         """
         # 1. Discover potential devices
         candidates = self.scanner.scan()
-        
+
         currently_active = []
 
         # 2. Verify Liveness (to filter deep sleep)
@@ -57,6 +64,8 @@ class GameStateController:
         if not currently_active:
             color = self.color_map.get('default', 'white')
             self.led.set_color(color)
+            if self.esp32:
+                self.esp32.set_color(color)
             return
 
         # Filter last_seen to only include currently active devices
@@ -67,6 +76,8 @@ class GameStateController:
             winner = max(active_last_seen, key=active_last_seen.get)
             color = self.color_map.get(winner, "white")
             self.led.set_color(color)
+            if self.esp32:
+                self.esp32.set_color(color)
 
     def run(self):
         # Start Web Config Server if enabled
@@ -92,6 +103,8 @@ class GameStateController:
         except KeyboardInterrupt:
             logger.info("Shutting down...")
             self.led.off()
+            if self.esp32:
+                self.esp32.off()
 
 if __name__ == "__main__":
     app = GameStateController()

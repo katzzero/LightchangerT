@@ -11,6 +11,7 @@ LightchangerT is a network-aware LED controller for gaming consoles. It detects 
 - **Custom Colors**: Fully customizable RGB color mapping for each brand.
 - **Steam Detection**: Concurrent multi-port probing + mDNS with retry logic.
 - **Atomic Config Writes**: Prevents config corruption on unexpected shutdowns.
+- **Remote LED Control**: Send color commands to ESP32 over TCP from any device on the network.
 
 ## Supported Platforms
 
@@ -63,6 +64,20 @@ LightchangerT is a network-aware LED controller for gaming consoles. It detects 
 3. Edit `config.h` with your WiFi credentials and hardware settings.
 4. Upload to your ESP32 board.
 
+### Remote Control (Optional)
+
+The ESP32 branch runs a TCP command server that accepts color commands from other devices on the network. Enable it in `config.json`:
+
+```json
+"esp32_command": {
+    "enabled": true,
+    "host": "192.168.1.50",
+    "port": 10001
+}
+```
+
+The Raspberry Pi will then mirror all detected color changes to the ESP32 via TCP in addition to controlling any local LEDs.
+
 ## Configuration
 
 Edit `config.json` (Python) or `config.h` (ESP32) to:
@@ -70,6 +85,7 @@ Edit `config.json` (Python) or `config.h` (ESP32) to:
 - Customize brand-to-color mapping
 - Set static device IPs and OUI prefixes
 - Enable the web configuration interface
+- Configure remote ESP32 control (Python branch)
 
 ### Web Config (Python)
 
@@ -81,6 +97,10 @@ To enable the web interface, set in `config.json`:
 
 Then restart the application. Access `http://<raspberry-pi-ip>` in your browser.
 
+### Remote Command Port (ESP32)
+
+Set the TCP port in the web config UI under the "Remote Command Port" section. Default is 10001. **A reboot is required after changing the port.**
+
 ### Web API Endpoints (ESP32)
 
 | Method | Endpoint | Description |
@@ -89,8 +109,21 @@ Then restart the application. Access `http://<raspberry-pi-ip>` in your browser.
 | GET | `/api/devices` | List all devices as JSON |
 | GET | `/api/device?idx=N` | Get device at index N |
 | DELETE | `/api/device?idx=N` | Delete device at index N |
-| POST | `/save` | Save device (params: `ip`, `brand`) |
+| GET | `/api/config` | Get command port setting |
+| POST | `/save` | Save device (params: `ip`, `brand`) or `cmd_port` |
 | POST | `/clear` | Clear all devices |
+
+### Remote Command Protocol
+
+Send text commands over TCP to the ESP32's command port. Each command is terminated with a newline (`\n`). One-shot connections — connect, send one command, receive response, disconnect.
+
+| Command | Example | Response |
+|---------|---------|----------|
+| Set color by name | `COLOR:blue\n` | `OK` |
+| Set color by RGB | `RGB:255,0,0\n` | `OK` |
+| Turn off | `OFF\n` | `OK` |
+| Query status | `STATUS?\n` | `STATUS:active` |
+| Unknown | anything | `ERR:UNKNOWN` |
 
 ## Hardware Wiring
 
@@ -100,7 +133,12 @@ Then restart the application. Access `http://<raspberry-pi-ip>` in your browser.
 ## Architecture
 
 ```
-Scan ARP table → Verify Liveness (ping) → Check Steam port → Determine Priority → Set LED
+Scan ARP table
+    → Verify Liveness (ping)
+    → Check Steam port (mDNS + TCP)
+    → Determine Priority (last online wins)
+    → Set LED (local)
+    → Mirror to ESP32 via TCP (if configured)
 ```
 
 ### Components
@@ -108,18 +146,19 @@ Scan ARP table → Verify Liveness (ping) → Check Steam port → Determine Pri
 | File | Purpose |
 |------|---------|
 | `main.py` | Entry point, GameStateController, main loop |
+| `esp32_client.py` | TCP client for remote ESP32 control |
 | `led_controller.py` | LED drivers (FastLED/NeoPixel/RPi_WS281X) |
+| `colors.py` | Shared color definitions |
 | `scanner.py` | Network device discovery (ARP + static list) |
 | `config_manager.py` | Thread-safe singleton config management |
 | `liveness.py` | ICMP ping device validation |
 | `steam_detector.py` | Steam detection (ports + mDNS) |
 | `web_config.py` | HTTP web configuration UI |
-| `colors.py` | Shared color definitions |
 
 ## CI
 
 GitHub Actions runs on every push/PR:
-- **Python**: syntax check (`py_compile`) + pytest suite
+- **Python**: syntax check + pytest suite
 - **ESP32**: Arduino CLI compilation
 - **Format**: ruff linting
 

@@ -23,7 +23,7 @@
   },
   "devices": {
     "steam_detection": {
-      "method": "PORT_PROBE", 
+      "method": "PORT_PROBE",
       "port": 27036,
       "mdns_hostname": "steamdeck.local"
     },
@@ -37,5 +37,10 @@
       "nintendo": ["00:09:BF", "00:16:56", "00:1A:E9", "00:1B:7A", "00:1C:BE", "00:1E:A9", "00:21:BD", "00:24:F3", "34:AF:2C", "E8:4E:CE", "CC:FB:65", "58:BD:A3", "70:48:F7", "70:F0:88", "74:84:69", "74:F9:CA", "98:B6:E9", "A4:C0:E1", "1C:45:86"],
       "nvidia": ["00:04:4B", "3C:6D:66", "48:B0:2D", "4C:BB:47", "74:25:54", "AC:3A:E2", "C4:70:BD"]
     }
+  },
+  "esp32_command": {
+    "enabled": false,
+    "host": "192.168.1.50",
+    "port": 10001
   }
 }

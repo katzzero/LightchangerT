@@ -1,7 +1,7 @@
 {
     "project": "LightchangerT",
-    "version": "2.1.0",
-    "description": "Network-based gaming console detection with LED color feedback on Raspberry Pi/Linux",
+    "version": "2.2.0",
+    "description": "Network-based gaming console detection with LED color feedback on Raspberry Pi/Linux with remote ESP32 control",
     "branch_type": "python",
     "platform": {
         "primary": "Raspberry Pi",
@@ -44,7 +44,8 @@
             "Changing detection logic/priority algorithms",
             "Adding new configuration options",
             "Fixing bugs that apply to both platforms",
-            "UI/UX improvements to web config interface"
+            "UI/UX improvements to web config interface",
+            "Remote command channel protocol updates"
         ],
         "sync_process": {
             "step1": "Implement feature on originating branch",
@@ -65,16 +66,27 @@
 
     "architecture": {
         "components": {
-            "main.py": "Entry point, GameStateController class, main loop with error recovery",
+            "main.py": "Entry point, GameStateController, main loop with error recovery and optional ESP32 remote mirror",
             "led_controller.py": "LED color management with factory pattern (FastLED/NeoPixel/RPi_WS281x)",
             "colors.py": "Shared COLOR_MAP and Color namedtuple definitions",
+            "esp32_client.py": "TCP client for sending color commands to remote ESP32 (COLOR:name, RGB:r,g,b, OFF)",
             "scanner.py": "Network device discovery via ARP table + static list",
             "config_manager.py": "Thread-safe singleton config loader with RLock and atomic writes",
             "liveness.py": "ICMP ping validation via subprocess",
             "steam_detector.py": "Steam detection via port probe or mDNS (zeroconf)",
             "web_config.py": "HTTP configuration UI with JSON editor and atomic writes"
         },
-        "flow": "Scan ARP table -> Verify Liveness (ping) -> Check Steam port -> Determine Priority -> Set LED"
+        "flow": "Scan ARP table -> Verify Liveness (ping) -> Check Steam port -> Determine Priority -> Set LED [-> Mirror to ESP32 if configured]"
+    },
+
+    "remote_command": {
+        "description": "TCP-based one-shot command channel for remote ESP32 LED control",
+        "protocol": "Text-based, newline-delimited. Commands: COLOR:name, RGB:r,g,b, OFF, STATUS?",
+        "responses": "OK, ERR:UNKNOWN, ERR:INVALID_RGB, STATUS:state",
+        "default_port": 10001,
+        "config_section": "esp32_command in config.json",
+        "esp32_side": "config.h COMMAND_PORT_DEFAULT, config_manager.h get/setCommandPort(), esp32.ino WiFiServer on command port",
+        "python_side": "esp32_client.py Esp32CommandClient class"
     },
 
     "detection": {
@@ -100,7 +112,11 @@
         "endpoints": [
             "GET / - Main configuration UI with JSON editor",
             "POST /save - Save configuration (atomic write via tempfile)",
-            "Fields: network_scan_interval_seconds, network_detection_mode, devices_static_list, colors, hardware"
+            "GET /api/config - Get command port setting",
+            "GET /api/devices - List all devices",
+            "GET /api/device?idx=N - Get device by index",
+            "DELETE /api/device?idx=N - Delete device by index",
+            "Fields: network_scan_interval_seconds, network_detection_mode, devices_static_list, colors, hardware, cmd_port"
         ],
         "security_notes": [
             "No authentication - only for trusted networks",
@@ -144,6 +160,14 @@
             "Added systemd service file (lightchanger.service)",
             "Added CI workflow (.github/workflows/ci.yml) with py_compile, pytest, ESP32 compile",
             "Expanded README with install, API docs, wiring guide, and CI documentation"
+        ],
+        "new_features_v2.2": [
+            "Remote ESP32 command channel via TCP (esp32_client.py + esp32.ino commandServer)",
+            "Protocol: COLOR:name, RGB:r,g,b, OFF, STATUS? - one-shot TCP, newline-delimited",
+            "Web UI command port setting with NVS persistence and reboot warning",
+            "Optional dual-mode: local LED + remote ESP32 mirror via esp32_command config",
+            "config_manager.h: getCommandPort/setCommandPort with NVS storage",
+            "config.json: esp32_command section (enabled, host, port)"
         ]
     }
 }
