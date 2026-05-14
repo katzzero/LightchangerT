@@ -25,6 +25,7 @@ private:
     static const char* KEY_FAILED_ATTEMPTS;
     static const char* KEY_DEVICES;
     static const char* KEY_CMD_PORT;
+    static const char* KEY_OFFLINE_THRESHOLD;
 
 public:
     void begin() {
@@ -148,6 +149,18 @@ public:
     int getFailedAttempts() {
         return prefs.getInt(KEY_FAILED_ATTEMPTS, 0);
     }
+
+    // ---- Offline Threshold ----
+
+    void setOfflineThreshold(int cycles) {
+        if (cycles >= 1 && cycles <= 100) {
+            prefs.putInt(KEY_OFFLINE_THRESHOLD, cycles);
+        }
+    }
+
+    int getOfflineThreshold() {
+        return prefs.getInt(KEY_OFFLINE_THRESHOLD, OFFLINE_THRESHOLD);
+    }
 };
 
 // Define static key constants
@@ -158,5 +171,6 @@ const char* ConfigManager::KEY_BRIGHTNESS = "led_brightness";
 const char* ConfigManager::KEY_FAILED_ATTEMPTS = "fail_count";
 const char* ConfigManager::KEY_DEVICES = "devices";
 const char* ConfigManager::KEY_CMD_PORT = "cmd_port";
+const char* ConfigManager::KEY_OFFLINE_THRESHOLD = "offline_thr";
 
 #endif

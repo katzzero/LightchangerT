@@ -29,6 +29,7 @@ WebServer server(80);
 WiFiServer commandServer(COMMAND_PORT_DEFAULT);
 
 std::map<String, unsigned long> lastSeen;
+std::map<String, int> missedCycles;
 
 unsigned long lastScanTime = 0;
 const unsigned long scanInterval = SCAN_INTERVAL_MS;
@@ -473,6 +474,29 @@ void loop() {
                 if (liveness.isAlive(ip)) {
                     lastSeen[dev.brand] = millis();
                     currentlyActiveBrands.push_back(dev.brand);
+                }
+            }
+        }
+
+        // Clean up stale brands
+        int offlineThreshold = configManager.getOfflineThreshold();
+        for (auto it = lastSeen.begin(); it != lastSeen.end(); ) {
+            String brand = it->first;
+            bool isActive = false;
+            for (const auto& b : currentlyActiveBrands) {
+                if (b == brand) { isActive = true; break; }
+            }
+            if (isActive) {
+                missedCycles[brand] = 0;
+                ++it;
+            } else {
+                missedCycles[brand] = missedCycles[brand] + 1;
+                if (missedCycles[brand] >= offlineThreshold) {
+                    Serial.printf("Removing stale brand '%s' (offline for %d cycles)\n", brand.c_str(), missedCycles[brand]);
+                    it = lastSeen.erase(it);
+                    missedCycles.erase(brand);
+                } else {
+                    ++it;
                 }
             }
         }
