@@ -56,6 +56,19 @@ class GameStateController:
 
         # Stores { brand: last_seen_timestamp }
         self.last_seen = {}
+        self._missed_cycles = {}
+        self._offline_threshold = self.config.get('network', {}).get('offline_threshold', 3)
+
+    def _cleanup_stale_brands(self, currently_active):
+        for brand in list(self.last_seen):
+            if brand in currently_active:
+                self._missed_cycles[brand] = 0
+            else:
+                self._missed_cycles[brand] = self._missed_cycles.get(brand, 0) + 1
+                if self._missed_cycles[brand] >= self._offline_threshold:
+                    logger.info(f"Removing stale brand '{brand}' (offline for {self._missed_cycles[brand]} cycles)")
+                    del self.last_seen[brand]
+                    del self._missed_cycles[brand]
 
     def update(self):
         """Cycle: Scan -> Verify Liveness -> Update Priority -> Set LED"""
@@ -74,6 +87,8 @@ class GameStateController:
         if steam_dev:
             self.last_seen['steam'] = time.time()
             currently_active.append('steam')
+
+        self._cleanup_stale_brands(currently_active)
 
         if not currently_active:
             color = self.color_map.get('default', 'white')
