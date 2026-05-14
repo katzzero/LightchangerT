@@ -1,15 +1,17 @@
 {
     "project": "LightchangerT",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "description": "Network-based gaming console detection with LED color feedback on Raspberry Pi/Linux and ESP32",
     "branch_type": "dual (Python + ESP32)",
     "platform": {
         "primary": "Raspberry Pi / Linux (Python 3.9+)",
         "secondary": "ESP32 (Arduino framework)",
-        "language": ["Python 3.9+", "C++ (Arduino)"],
+        "language": [
+            "Python 3.9+",
+            "C++ (Arduino)"
+        ],
         "os_requirements": "Linux with arp, ping commands available; ESP32 with Arduino framework"
     },
-
     "pipeline": {
         "setup": [
             "Install Python 3.9+ and dependencies: pip install -r requirements.txt",
@@ -32,7 +34,6 @@
             "sudo systemctl enable --now lightchanger"
         ]
     },
-
     "sync_instructions": {
         "description": "Guidelines for syncing features between Python (main) and ESP32 branches",
         "principles": [
@@ -67,7 +68,6 @@
             "Language-specific patterns (Python threads vs Arduino loops)"
         ]
     },
-
     "architecture": {
         "python_components": {
             "main.py": "Entry point, GameStateController with optional ESP32 remote mirror",
@@ -81,7 +81,7 @@
             "colors.py": "Shared COLOR_MAP, Color namedtuple, BRAND_COLORS"
         },
         "esp32_components": {
-            "esp32.ino": "Main sketch — non-blocking loop, command server, captive portal, AP/STA switching, OTA",
+            "esp32.ino": "Main sketch \u2014 non-blocking loop, command server, captive portal, AP/STA switching, OTA",
             "config.h": "Hardware config, color definitions, OUI prefixes, Steam ports",
             "config_manager.h": "NVS-persisted config (WiFi creds, devices, command port, scan interval, brightness, fail counter)",
             "led_controller.h": "FastLED driver with CRGB color model",
@@ -95,15 +95,18 @@
         },
         "flow": "Scan (ARP + static) -> Liveness (ping) -> Steam (port probe / mDNS) -> Priority (last online wins) -> LED color + optional ESP32 remote mirror"
     },
-
     "detection": {
-        "methods": ["MAC_OUI", "STATIC_LIST", "PORT_PROBE", "MDNS"],
+        "methods": [
+            "MAC_OUI",
+            "STATIC_LIST",
+            "PORT_PROBE",
+            "MDNS"
+        ],
         "validation": "ICMP_Ping via subprocess (Python) / ESPPing (ESP32)",
         "deep_sleep_handling": "Considered offline if ping fails",
         "priority_logic": "Last online device wins (timestamp-based)",
         "device_management": "Web UI with JSON editor (Python) and REST API (ESP32)"
     },
-
     "color_mapping": {
         "sony": "blue",
         "microsoft": "green",
@@ -112,7 +115,6 @@
         "nvidia": "light_green",
         "default": "white"
     },
-
     "remote_command_protocol": {
         "transport": "TCP, one-shot connection per command, newline-delimited text",
         "default_port": 10001,
@@ -134,7 +136,6 @@
             "echo 'STATUS?' | nc 192.168.1.50 10001"
         ]
     },
-
     "web_config": {
         "python_enabled_via": "config.json network.web_config_enabled",
         "python_default_port": 80,
@@ -158,45 +159,66 @@
             "No TLS by default - use on trusted networks or behind HTTPS proxy"
         ]
     },
-
     "hardware": {
-        "python_supported_libraries": ["FastLED (sim)", "neopixel", "rpi_ws281x"],
+        "python_supported_libraries": [
+            "FastLED (sim)",
+            "neopixel",
+            "rpi_ws281x"
+        ],
         "esp32_led_pin": 13,
         "esp32_num_leds": 30,
         "esp32_default_brightness": 128
     },
-
     "ota": {
         "enabled": true,
         "default_port": 3232,
         "arduino_ota_lib": true,
         "note": "OTA uses ArduinoOTA; authenticate before flashing in production"
     },
-
     "captive_portal": {
         "ap_ssid": "Lightchanger-Setup",
         "ap_password": "lightchanger",
         "max_failed_attempts": 5,
         "connect_timeout_ms": 15000
     },
-
     "dependencies": {
         "python": {
-            "core": ["zeroconf>=4.2.0"],
-            "testing": ["pytest>=7.0.0"]
+            "core": [
+                "zeroconf>=4.2.0"
+            ],
+            "testing": [
+                "pytest>=7.0.0"
+            ]
         },
         "esp32": {
-            "core": ["FastLED@3.10.3", "ESPping@1.0.5", "ESPmDNS", "WiFi", "WebServer", "Preferences"],
-            "optional": ["ArduinoOTA (built-in)"]
+            "core": [
+                "FastLED@3.10.3",
+                "ESPping@1.0.5",
+                "ESPmDNS",
+                "WiFi",
+                "WebServer",
+                "Preferences"
+            ],
+            "optional": [
+                "ArduinoOTA (built-in)"
+            ]
         }
     },
-
     "ci": {
         "github_actions": true,
-        "python_versions": ["3.9", "3.10", "3.11", "3.12"],
-        "checks": ["py_compile", "flake8", "pytest", "arduino-cli compile"]
+        "python_versions": [
+            "3.9",
+            "3.10",
+            "3.11",
+            "3.12"
+        ],
+        "checks": [
+            "py_compile",
+            "flake8",
+            "pytest",
+            "arduino-cli compile"
+        ]
     },
-
     "directory_structure": {
         "main_branch": {
             "root": "main.py (shim), config.json, requirements.txt, .github/, AI/, README.md",
@@ -207,9 +229,8 @@
             "esp32/": "All ESP32 C++ files (*.h, *.ino, *.cpp)"
         }
     },
-
     "current_phase": "Production",
-    "last_updated": "2026-05-13",
+    "last_updated": "2026-05-14",
     "changes": {
         "v2.3.1": [
             "Moved ESP32 C++ files into esp32/ directory on ESP32 branch",
@@ -238,6 +259,17 @@
             "Added atomic writes to config_manager.py",
             "Restructured project with python/ directory",
             "28/28 pytest tests passing"
+        ],
+        "v2.4.0": [
+            "Restructured ESP32 branch: Python files moved to python/, C++ files in esp32/, root main.py delegates",
+            "Fixed _recv_line in esp32_client.py: added max_bytes=4096 guard to prevent hang",
+            "Fixed scanner.py ARP regex for macOS single-digit hex MACs",
+            "Fixed scanner.py to honor detection_mode config (HYBRID/STATIC_LIST/AUTO)",
+            "Fixed steam_detector.py _resolve_mdns timeout to match resolve_mdns_multi (ms consistent)",
+            "Wired ConfigManager singleton into GameStateController (thread-safe, atomic writes)",
+            "Removed dead get_mac_address() method from scanner.py",
+            "Added 15 tests for config_manager.py (singleton, load, get, update, persist, reload)",
+            "Updated project manifest v2.4.0 with directory structure, CI paths, and architecture docs"
         ]
     }
 }
