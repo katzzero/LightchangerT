@@ -1,6 +1,6 @@
 {
     "project": "LightchangerT",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "description": "Network-based gaming console detection with LED color feedback on Raspberry Pi/Linux and ESP32",
     "branch_type": "dual (Python + ESP32)",
     "platform": {
@@ -10,19 +10,49 @@
         "os_requirements": "Linux with arp, ping commands available; ESP32 with Arduino framework"
     },
 
+    "directory_structure": {
+        "root": {
+            "description": "Same on both branches",
+            "entries": {
+                "main.py": "Entry point — delegates to python/main.py",
+                "python/": "All Python source and tests",
+                "config.json": "Shared configuration",
+                "AI/": "Project manifest and metadata"
+            }
+        },
+        "main_branch": {
+            "extra_entries": {
+                ".github/": "CI workflow",
+                "lightchanger.service": "Systemd unit for RPi",
+                "requirements.txt": "Python dependencies",
+                "README.md": "Documentation"
+            }
+        },
+        "ESP32_branch": {
+            "extra_entries": {
+                "esp32/": "All C++ firmware (esp32.ino, *.h, main.cpp)",
+                ".github/": "CI workflow with Arduino CLI compile",
+                "CSRF_PROTECTION.md": "Security documentation",
+                "lightchanger.service": "Systemd unit for RPi",
+                "requirements.txt": "Python dependencies",
+                "README.md": "Documentation"
+            }
+        }
+    },
+
     "pipeline": {
         "setup": [
             "Install Python 3.9+ and dependencies: pip install -r requirements.txt",
             "For ESP32: install Arduino IDE or PlatformIO, add ESP32 board support",
             "Install ESP32 libraries: FastLED 3.10.3, ESPing 1.0.5, ESPmDNS",
             "Configure config.json (Python) or config.h (ESP32) with network settings",
-            "Test: python3 -m pytest tests/ -v",
-            "Test ESP32: arduino-cli compile --fqbn esp32:esp32:esp32 ."
+            "Test: python3 -m pytest python/tests/ -v",
+            "Test ESP32: arduino-cli compile --fqbn esp32:esp32:esp32 esp32/"
         ],
         "testing": [
-            "python3 -m py_compile *.py",
-            "python3 -m pytest tests/ -v --tb=short",
-            "arduino-cli compile --fqbn esp32:esp32:esp32 . (CI validated)"
+            "python3 -m py_compile python/*.py",
+            "python3 -m pytest python/tests/ -v --tb=short",
+            "arduino-cli compile --fqbn esp32:esp32:esp32 esp32/ (CI validated)"
         ],
         "build": "Native Python - no build step; ESP32 compiles via Arduino CLI",
         "deploy": [
@@ -40,7 +70,8 @@
             "Feature parity is goal, not exact code parity",
             "Manifest updates should be mirrored to both branches",
             "Detection logic (MAC_OUI, STATIC_LIST, PORT_PROBE, MDNS) should be consistent",
-            "Remote command protocol (COLOR:, RGB:, OFF, STATUS?) is shared and versioned"
+            "Remote command protocol (COLOR:, RGB:, OFF, STATUS?) is shared and versioned",
+            "Python code lives in python/ on both branches; ESP32 code lives in esp32/ on ESP32 branch"
         ],
         "when_to_sync": [
             "Adding new device detection methods",
@@ -70,30 +101,30 @@
 
     "architecture": {
         "python_components": {
-            "main.py": "Entry point, GameStateController with optional ESP32 remote mirror",
-            "scanner.py": "Network device discovery via ARP table + static list",
-            "config_manager.py": "Thread-safe singleton with atomic writes and deep merge",
-            "liveness.py": "ICMP ping validation via subprocess",
-            "steam_detector.py": "Steam detection via port probe or mDNS (zeroconf)",
-            "led_controller.py": "LED color management (FastLED/NeoPixel/RPi_WS281X) with _to_rgb()",
-            "web_config.py": "HTTP config UI with ConfigManager integration and ESP32 remote settings",
-            "esp32_client.py": "TCP client for remote ESP32 color commands",
-            "colors.py": "Shared COLOR_MAP, Color namedtuple, BRAND_COLORS"
+            "python/main.py": "Entry point, GameStateController with ConfigManager singleton and optional ESP32 remote mirror",
+            "python/scanner.py": "Network device discovery via ARP table + static list; honors detection_mode config",
+            "python/config_manager.py": "Thread-safe singleton with atomic writes, dot-notation get(key.path), and deep merge",
+            "python/liveness.py": "ICMP ping validation via subprocess",
+            "python/steam_detector.py": "Steam detection via port probe or mDNS (zeroconf) with configurable timeout",
+            "python/led_controller.py": "LED color management (FastLED/NeoPixel/RPi_WS281X) with _to_rgb()",
+            "python/web_config.py": "HTTP config UI with ConfigManager integration and ESP32 remote settings",
+            "python/esp32_client.py": "TCP client for remote ESP32 color commands with capped _recv_line (max 4096 bytes)",
+            "python/colors.py": "Shared COLOR_MAP, Color namedtuple, BRAND_COLORS"
         },
         "esp32_components": {
-            "esp32.ino": "Main sketch — non-blocking loop, command server, captive portal, AP/STA switching, OTA",
-            "config.h": "Hardware config, color definitions, OUI prefixes, Steam ports",
-            "config_manager.h": "NVS-persisted config (WiFi creds, devices, command port, scan interval, brightness, fail counter)",
-            "led_controller.h": "FastLED driver with CRGB color model",
-            "steam_detector.h": "Multi-port + mDNS Steam detection with retries",
-            "network_scanner.h": "Static device validator with IP format check",
-            "liveness_engine.h": "ICMP ping via ESPPing library",
-            "captive_portal.h": "AP mode setup portal with web form, NVS persistence",
-            "web_ui.h": "HTML/JS config UI with device management and command port settings",
-            "ota_fw_update.h": "ArduinoOTA firmware update support",
-            "basic_auth.h": "Session-based auth and CSRF token validation"
+            "esp32/esp32.ino": "Main sketch — non-blocking loop, command server, captive portal, AP/STA switching, OTA",
+            "esp32/config.h": "Hardware config, color definitions, OUI prefixes, Steam ports",
+            "esp32/config_manager.h": "NVS-persisted config (WiFi creds, devices, command port, scan interval, brightness, fail counter)",
+            "esp32/led_controller.h": "FastLED driver with CRGB color model",
+            "esp32/steam_detector.h": "Multi-port + mDNS Steam detection with retries",
+            "esp32/network_scanner.h": "Static device validator with IP format check",
+            "esp32/liveness_engine.h": "ICMP ping via ESPPing library",
+            "esp32/captive_portal.h": "AP mode setup portal with web form, NVS persistence",
+            "esp32/web_ui.h": "HTML/JS config UI with device management and command port settings",
+            "esp32/ota_fw_update.h": "ArduinoOTA firmware update support",
+            "esp32/basic_auth.h": "Session-based auth and CSRF token validation"
         },
-        "flow": "Scan (ARP + static) -> Liveness (ping) -> Steam (port probe / mDNS) -> Priority (last online wins) -> LED color + optional ESP32 remote mirror"
+        "flow": "Scan (ARP + static, respects detection_mode) -> Liveness (ping) -> Steam (port probe / mDNS) -> Priority (last online wins) -> LED color + optional ESP32 remote mirror"
     },
 
     "detection": {
@@ -194,12 +225,23 @@
     "ci": {
         "github_actions": true,
         "python_versions": ["3.9", "3.10", "3.11", "3.12"],
-        "checks": ["py_compile", "flake8", "pytest", "arduino-cli compile"]
+        "checks": ["py_compile python/*.py", "pytest python/tests/", "arduino-cli compile esp32/"]
     },
 
     "current_phase": "Production",
-    "last_updated": "2026-05-13",
+    "last_updated": "2026-05-14",
     "changes": {
+        "v2.4.0": [
+            "Restructured ESP32 branch: Python files moved to python/, C++ files in esp32/, root main.py delegates",
+            "Fixed _recv_line in esp32_client.py: added max_bytes=4096 guard to prevent hang",
+            "Fixed scanner.py ARP regex for macOS single-digit hex MACs",
+            "Fixed scanner.py to honor detection_mode config (HYBRID/STATIC_LIST/AUTO)",
+            "Fixed steam_detector.py _resolve_mdns timeout to match resolve_mdns_multi (ms consistent)",
+            "Wired ConfigManager singleton into GameStateController (thread-safe, atomic writes)",
+            "Removed dead get_mac_address() method from scanner.py",
+            "Added 15 tests for config_manager.py (singleton, load, get, update, persist, reload)",
+            "Updated project manifest v2.4.0 with directory structure, CI paths, and architecture docs"
+        ],
         "v2.3.0": [
             "Added esp32_client.py for TCP remote color control of ESP32 from Python",
             "Added dual-mode LED control in Python main.py (local + optional ESP32 mirror)",

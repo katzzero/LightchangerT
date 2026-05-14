@@ -88,10 +88,10 @@ class ESP32Client:
             self._close_socket()
             raise ConnectionError("ESP32 command failed: %s" % e)
 
-    def _recv_line(self) -> str:
+    def _recv_line(self, max_bytes: int = 4096) -> str:
         """Read a newline-terminated response from the socket."""
         buffer = b""
-        while True:
+        while len(buffer) < max_bytes:
             try:
                 chunk = self._sock.recv(1)
             except socket.timeout:

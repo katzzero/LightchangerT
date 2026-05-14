@@ -7,7 +7,6 @@ Or from within python/:
 import time
 import threading
 import logging
-import json
 import os
 import sys
 
@@ -26,6 +25,7 @@ from colors import BRAND_COLORS as COLOR_MAP
 from steam_detector import SteamDetector
 from web_config import run_server
 from esp32_client import get_esp32_client
+from config_manager import get_config_manager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,9 +38,9 @@ DEFAULT_CONFIG = os.path.join(BASE_DIR, "config.json")
 
 class GameStateController:
     def __init__(self, config_path=None):
+        self.cm = get_config_manager()
         config_path = config_path or DEFAULT_CONFIG
-        with open(config_path, 'r') as f:
-            self.config = json.load(f)
+        self.config = self.cm.load(config_path)
 
         self.scanner = NetworkScanner(config_path)
         self.liveness = LivenessEngine(config_path)
@@ -92,8 +92,8 @@ class GameStateController:
                 self.esp32.set_color(color)
 
     def run(self):
-        web_enabled = self.config['network'].get('web_config_enabled', False)
-        web_port = self.config['network'].get('web_config_port', 80)
+        web_enabled = self.cm.get('network.web_config_enabled', False)
+        web_port = self.cm.get('network.web_config_port', 80)
 
         if web_enabled:
             logger.info(f"Starting Web Config Server on port {web_port}")
@@ -101,7 +101,7 @@ class GameStateController:
             web_thread.daemon = True
             web_thread.start()
 
-        interval = self.config['network'].get('scan_interval_seconds', 30)
+        interval = self.cm.get('network.scan_interval_seconds', 30)
         logger.info(f"Starting LightchangerT service (Interval: {interval}s)")
 
         try:

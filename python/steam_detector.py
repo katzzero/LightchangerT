@@ -32,11 +32,11 @@ class SteamDetector:
         except Exception:
             return False
 
-    def _resolve_mdns(self):
+    def _resolve_mdns(self, timeout=2):
         """Attempts to resolve the Steam device via mDNS."""
         try:
             with Zeroconf() as zeroconf:
-                infos = zeroconf.get_service_info('_http._tcp.local.', self.hostname, 1)
+                infos = zeroconf.get_service_info('_http._tcp.local.', self.hostname, timeout * 1000)
                 if infos:
                     return socket.inet_nta(infos[0].addresses[0])
         except Exception:
