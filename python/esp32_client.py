@@ -4,9 +4,8 @@ Sends color commands to a remote ESP32 over TCP.
 
 Usage:
     client = ESP32Client(host="192.168.1.50", port=10001)
-    client.send_command("COLOR:blue")
-    client.send_command("RGB:255,0,0")
-    client.send_command("OFF")
+    client.set_color("blue")
+    client.off()
     status = client.get_status()
     client.close()
 
@@ -15,16 +14,37 @@ Protocol (text-based, one-shot TCP, newline-delimited):
     Responses: OK, ERR:<reason>, STATUS:<state>
 """
 
+import json
 import socket
 import logging
 from typing import Optional, Tuple, Dict
 
-from led_controller import _to_rgb
+from colors import COLOR_MAP
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 10001
 DEFAULT_TIMEOUT = 5  # seconds
+
+
+def _to_rgb(color_name: str) -> Tuple[int, int, int]:
+    """Convert a named, hex, or tuple color to an RGB tuple."""
+    if isinstance(color_name, tuple):
+        return color_name
+    color_name = color_name.lower().strip()
+    if color_name in COLOR_MAP:
+        return COLOR_MAP[color_name]
+
+    if color_name.startswith("#"):
+        color_name = color_name[1:]
+    if len(color_name) == 6:
+        try:
+            return tuple(int(color_name[i:i+2], 16) for i in (0, 2, 4))
+        except ValueError:
+            pass
+
+    logger.warning(f"Unknown color '{color_name}', defaulting to white")
+    return COLOR_MAP["white"]
 
 
 class ESP32Client:
@@ -70,7 +90,7 @@ class ESP32Client:
             command: One of "COLOR:<name>", "RGB:<r>,<g>,<b>", "OFF", "STATUS?"
 
         Returns:
-            Response string from ESP32 (e.g. "OK", "ERR:*", "STATUS:active")
+            Response string from ESP32 (e.g. "OK", "ERR:<reason>", "STATUS:<state>")
 
         Raises:
             ConnectionError: If not connected or connection fails.
@@ -86,35 +106,38 @@ class ESP32Client:
         except OSError as e:
             logger.error("Command '%s' failed: %s", command, e)
             self._close_socket()
-            raise ConnectionError("ESP32 command failed: %s" % e)
+            raise ConnectionError(f"ESP32 command failed: {e}")
 
     def _recv_line(self, max_bytes: int = 4096) -> str:
-        """Read a newline-terminated response from the socket."""
-        buffer = b""
-        while len(buffer) < max_bytes:
+        """Read a newline-terminated response from the socket efficiently."""
+        chunks = []
+        total_bytes = 0
+        while total_bytes < max_bytes:
             try:
-                chunk = self._sock.recv(1)
+                chunk = self._sock.recv(min(4096, max_bytes - total_bytes))
             except socket.timeout:
                 break
             if not chunk:
                 break
-            buffer += chunk
-            if chunk == b"\n":
+            chunks.append(chunk)
+            total_bytes += len(chunk)
+            if b"\n" in chunk:
                 break
-        return buffer.decode("utf-8", errors="replace")
+        buffer = b"".join(chunks)
+        return buffer.decode("utf-8", errors="replace").split("\n")[0]
 
     # ---- High-level convenience methods ----
 
     def set_color(self, color_name: str) -> str:
         """Set LED color by named color (e.g. 'blue', 'red', 'light_blue')."""
-        return self.send_command("COLOR:%s" % color_name)
+        return self.send_command(f"COLOR:{color_name}")
 
     def set_rgb(self, r: int, g: int, b: int) -> str:
         """Set LED color by RGB values (0-255 each)."""
         r = max(0, min(255, r))
         g = max(0, min(255, g))
         b = max(0, min(255, b))
-        return self.send_command("RGB:%d,%d,%d" % (r, g, b))
+        return self.send_command(f"RGB:{r},{g},{b}")
 
     def set_rgb_tuple(self, rgb: Tuple[int, int, int]) -> str:
         """Set LED color from an (r, g, b) tuple."""
@@ -179,7 +202,6 @@ def get_esp32_client(config: Optional[Dict] = None, config_path: str = "config.j
         ESP32Client instance, or None if not configured.
     """
     if config is None:
-        import json
         try:
             with open(config_path, "r") as f:
                 config = json.load(f)

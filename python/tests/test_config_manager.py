@@ -10,6 +10,12 @@ from config_manager import ConfigManager, get_config_manager
 
 
 SAMPLE_CONFIG = {
+    "auth": {
+        "enabled": False,
+        "username": "admin",
+        "password_hash": "",
+        "salt": ""
+    },
     "network": {"subnet": "192.168.1.0/24", "scan_interval_seconds": 30},
     "devices": {
         "static_list": [{"ip": "192.168.1.10", "mac": "00:11:22:33:44:55", "brand": "sony"}],
@@ -28,6 +34,8 @@ def config_file(tmp_path):
 
 @pytest.fixture(autouse=True)
 def reset_singleton():
+    ConfigManager._instance = None
+    yield
     ConfigManager._instance = None
 
 
@@ -73,12 +81,25 @@ class TestLoad:
         refreshed = cm.reload()
         assert refreshed["network"]["subnet"] == "10.0.0.0/8"
 
+    def test_load_returns_deepcopy(self, config_file):
+        """Ensure load returns a copy, not a reference to internal state."""
+        cm = ConfigManager()
+        config1 = cm.load(config_file)
+        config2 = cm.load(config_file)
+        assert config1 is not config2
+        config1["network"]["subnet"] = "99.99.99.99"
+        assert config2["network"]["subnet"] == "192.168.1.0/24"
+
 
 class TestGet:
     def test_full_config(self, config_file):
         cm = ConfigManager()
         cm.load(config_file)
-        assert cm.get()["network"]["subnet"] == "192.168.1.0/24"
+        full = cm.get()
+        assert full["network"]["subnet"] == "192.168.1.0/24"
+        # Ensure it's a deep copy
+        full["network"]["subnet"] = "changed"
+        assert cm.get("network.scan_interval_seconds") == 30
 
     def test_top_level_key(self, config_file):
         cm = ConfigManager()
@@ -99,6 +120,13 @@ class TestGet:
         cm = ConfigManager()
         cm.load(config_file)
         assert cm.get("nonexistent") is None
+
+    def test_get_returns_deepcopy(self, config_file):
+        cm = ConfigManager()
+        cm.load(config_file)
+        val = cm.get("devices")
+        val["static_list"] = []
+        assert len(cm.get("devices.static_list")) == 1
 
 
 class TestUpdate:
@@ -122,6 +150,37 @@ class TestUpdate:
         cm.load(config_file)
         cm.update({"devices": {"static_list": []}})
         assert cm.get("devices.static_list") == []
+
+    def test_deep_merge_preserves_siblings(self, config_file):
+        cm = ConfigManager()
+        cm.load(config_file)
+        cm.update({"network": {"scan_interval_seconds": 60}})
+        assert cm.get("network.subnet") == "192.168.1.0/24"
+        assert cm.get("network.scan_interval_seconds") == 60
+
+
+class TestWatch:
+    def test_watch_detects_change(self, config_file, tmp_path):
+        cm = ConfigManager()
+        cm.load(config_file)
+
+        changes = []
+
+        def on_change(config):
+            changes.append(config.get("network", {}).get("scan_interval_seconds"))
+
+        cm.watch(on_change, interval=0.1)
+
+        # Modify the file
+        import time
+        time.sleep(0.2)
+        with open(config_file, "w") as f:
+            json.dump({"network": {"scan_interval_seconds": 120}}, f)
+
+        time.sleep(0.5)
+        cm.stop_watch()
+        assert len(changes) >= 1
+        assert changes[-1] == 120
 
 
 if __name__ == "__main__":

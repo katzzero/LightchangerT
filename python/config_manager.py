@@ -4,6 +4,7 @@ import tempfile
 import threading
 import logging
 from pathlib import Path
+from copy import deepcopy
 
 CONFIG_FILE = "config.json"
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class ConfigManager:
                 with open(self._path, 'r') as f:
                     self._config = json.load(f)
                 logger.info(f"Configuration loaded from {self._path}")
-                return self._config
+                return deepcopy(self._config)
             except FileNotFoundError:
                 logger.error(f"Config file not found: {self._path}")
                 raise
@@ -51,7 +52,7 @@ class ConfigManager:
             if self._config is None:
                 self.load()
             if key is None:
-                return self._config
+                return deepcopy(self._config)
             keys = key.split('.')
             value = self._config
             for k in keys:
@@ -59,14 +60,14 @@ class ConfigManager:
                     value = value.get(k)
                 else:
                     return default
-            return value if value is not None else default
+            return deepcopy(value) if value is not None else default
 
     def update(self, updates):
-        """Thread-safe config update with atomic writes."""
+        """Thread-safe config update with atomic writes and deep merge."""
         with self._config_lock:
             if self._config is None:
                 self.load()
-            self._config.update(updates)
+            self._deep_merge(self._config, updates)
             # Atomic write: tempfile + os.replace to prevent corruption on crash
             dir_name = os.path.dirname(self._path) or '.'
             fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
@@ -82,12 +83,48 @@ class ConfigManager:
                 raise
             logger.info("Configuration updated")
 
+    @staticmethod
+    def _deep_merge(base, override):
+        """Recursively merge override into base in-place."""
+        for k, v in override.items():
+            if k in base and isinstance(base[k], dict) and isinstance(v, dict):
+                ConfigManager._deep_merge(base[k], v)
+            else:
+                base[k] = deepcopy(v)
+
+    def watch(self, callback, interval=1.0):
+        """
+        Start a background thread that watches for config file changes
+        and calls callback(config) when it changes.
+        """
+        import hashlib
+
+        def _watch():
+            last_hash = None
+            while self._running:
+                try:
+                    with open(self._path, 'rb') as f:
+                        current_hash = hashlib.md5(f.read()).hexdigest()
+                    if current_hash != last_hash:
+                        last_hash = current_hash
+                        with self._config_lock:
+                            new_config = self.reload()
+                        callback(deepcopy(new_config))
+                except Exception:
+                    pass
+                import time
+                time.sleep(interval)
+
+        self._running = True
+        self._watch_thread = threading.Thread(target=_watch, daemon=True)
+        self._watch_thread.start()
+
+    def stop_watch(self):
+        """Stop the config file watcher."""
+        self._running = False
+        if hasattr(self, '_watch_thread'):
+            self._watch_thread.join(timeout=2)
+
 
 def get_config_manager():
     return ConfigManager()
-
-
-if __name__ == "__main__":
-    cm = get_config_manager()
-    config = cm.load()
-    print("Loaded config:", json.dumps(config, indent=2))

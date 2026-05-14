@@ -51,8 +51,10 @@ class MockServer:
                     self.received_commands.append(line)
                     if line == "STATUS?":
                         conn.sendall(b"STATUS:active\n")
-                    else:
+                    elif line.startswith("COLOR:") or line.startswith("RGB:") or line == "OFF":
                         conn.sendall(b"OK\n")
+                    else:
+                        conn.sendall(b"ERR:UNKNOWN\n")
                     buffer = b""
         except socket.timeout:
             pass
@@ -74,9 +76,7 @@ def server():
     ms.stop()
 
 
-class TestESP32Client:
-    """Tests for ESP32Client class."""
-
+class TestESP32ClientBasics:
     def test_init_default_port(self):
         client = ESP32Client("192.168.1.50")
         assert client.port == DEFAULT_PORT
@@ -92,8 +92,10 @@ class TestESP32Client:
 
     def test_close_when_not_connected(self):
         client = ESP32Client("192.168.1.50")
-        client.close()  # Should not raise
+        client.close()
 
+
+class TestESP32ClientCommands:
     def test_send_command_connects_if_needed(self, server):
         client = ESP32Client("127.0.0.1", port=server.port, timeout=2)
         response = client.send_command("COLOR:blue")
@@ -150,10 +152,21 @@ class TestESP32Client:
         assert "STATUS?" in server.received_commands
         client.close()
 
-    def test_send_command_newline_delimited(self, server):
+    def test_set_rgb_clamps_values(self, server):
         client = ESP32Client("127.0.0.1", port=server.port, timeout=2)
-        client.send_command("COLOR:green")
-        assert any("COLOR:green" in cmd for cmd in server.received_commands)
+        client.set_rgb(300, -10, 500)
+        assert any("RGB:255,0,255" in cmd for cmd in server.received_commands)
+        client.close()
+
+    def test_sequential_commands(self, server):
+        client = ESP32Client("127.0.0.1", port=server.port, timeout=2)
+        r1 = client.send_command("COLOR:red")
+        r2 = client.send_command("OFF")
+        r3 = client.get_status()
+        assert r1 == "OK"
+        assert r2 == "OK"
+        assert r3 == "STATUS:active"
+        assert server.received_commands == ["COLOR:red", "OFF", "STATUS?"]
         client.close()
 
     def test_connect_explicit(self, server):
@@ -168,30 +181,10 @@ class TestESP32Client:
         client = ESP32Client("127.0.0.1", port=server.port, timeout=2)
         client.connect()
         client.close()
-        client.close()  # Should not raise
-
-    def test_set_rgb_clamps_values(self, server):
-        client = ESP32Client("127.0.0.1", port=server.port, timeout=2)
-        client.set_rgb(300, -10, 500)
-        assert any("RGB:255,0,255" in cmd for cmd in server.received_commands)
-        client.close()
-
-    def test_sequential_commands(self, server):
-        """Multiple commands over one connection work correctly."""
-        client = ESP32Client("127.0.0.1", port=server.port, timeout=2)
-        r1 = client.send_command("COLOR:red")
-        r2 = client.send_command("OFF")
-        r3 = client.get_status()
-        assert r1 == "OK"
-        assert r2 == "OK"
-        assert r3 == "STATUS:active"
-        assert server.received_commands == ["COLOR:red", "OFF", "STATUS?"]
         client.close()
 
 
 class TestESP32ClientFactory:
-    """Tests for the get_esp32_client() factory function."""
-
     def test_returns_none_when_disabled(self):
         config = {"esp32_command": {"enabled": False}}
         client = get_esp32_client(config=config)
@@ -236,3 +229,17 @@ class TestESP32ClientFactory:
         config_file.write_text('{"network": {"scan_interval_seconds": 30}}')
         client = get_esp32_client(config_path=str(config_file))
         assert client is None
+
+
+class TestToRGB:
+    def test_named_color(self):
+        from esp32_client import _to_rgb
+        assert _to_rgb("blue") == (0, 0, 255)
+
+    def test_hex_color(self):
+        from esp32_client import _to_rgb
+        assert _to_rgb("#00FF00") == (0, 255, 0)
+
+    def test_unknown_defaults_white(self):
+        from esp32_client import _to_rgb
+        assert _to_rgb("mauve") == (255, 255, 255)

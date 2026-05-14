@@ -19,13 +19,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest zeroconf
+          pip install pytest zeroconf psutil
+
+      - name: Lint Python files
+        run: ruff check *.py python/*.py python/tests/*.py
 
       - name: Syntax check
-        run: python3 -m py_compile *.py tests/*.py
+        run: python3 -m py_compile *.py python/*.py python/tests/*.py
 
       - name: Run tests
-        run: python3 -m pytest tests/ -v --tb=short
+        run: python3 -m pytest python/tests/ -v --tb=short
 
   esp32-compile:
     runs-on: ubuntu-latest
@@ -51,6 +54,7 @@ jobs:
 
       - name: Compile ESP32 firmware
         run: |
+          cd esp32
           arduino-cli compile --fqbn esp32:esp32:esp32 esp32.ino 2>&1 | tee compile.log
 
   python-format:
@@ -67,4 +71,4 @@ jobs:
         run: pip install ruff
 
       - name: Lint Python files
-        run: ruff check *.py tests/*.py || true
+        run: ruff check *.py python/*.py python/tests/*.py

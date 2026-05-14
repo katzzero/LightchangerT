@@ -1,6 +1,9 @@
 # LightchangerT - Python requirements
 # Network discovery
-zeroconf>=4.2.0  # Required for mDNS Steam detection
+zeroconf>=4.2.0
+
+# Process monitoring (for config hot-reload detection)
+psutil>=5.9.0
 
 # LED controller libraries (uncomment based on your hardware):
 # FastLED==3.9.12

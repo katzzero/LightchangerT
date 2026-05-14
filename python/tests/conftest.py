@@ -11,6 +11,12 @@ from led_controller import LEDController, Color, FastLEDController, NeoPixelCont
 @pytest.fixture
 def sample_config():
     return {
+        "auth": {
+            "enabled": False,
+            "username": "admin",
+            "password_hash": "",
+            "salt": ""
+        },
         "hardware": {
             "led_pin": 13,
             "num_leds": 30,

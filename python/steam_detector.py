@@ -23,36 +23,51 @@ class SteamDetector:
         self.port = self.config.get('port', 27036)
         self.hostname = self.config.get('mdns_hostname', 'steamdeck.local')
 
-    def _probe_port(self, ip):
-        """Tries to connect to the Steam port to verify active status."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(1)
-                return s.connect_ex((ip, self.port)) == 0
-        except Exception:
-            return False
+        # Reuse a single Zeroconf instance instead of creating one per call
+        self._zeroconf = None
 
-    def _resolve_mdns(self, timeout=2):
+    def _get_zeroconf(self):
+        """Lazily create and reuse a single Zeroconf instance."""
+        if self._zeroconf is None:
+            self._zeroconf = Zeroconf()
+        return self._zeroconf
+
+    def close(self):
+        """Clean up the shared Zeroconf instance."""
+        if self._zeroconf is not None:
+            self._zeroconf.close()
+            self._zeroconf = None
+
+    def _probe_port(self, ip, ports=None):
+        """Tries to connect to Steam port(s) to verify active status."""
+        if ports is None:
+            ports = [27036, 27016, 27017, 27015, 54985]
+
+        for port in ports:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(1)
+                    if s.connect_ex((ip, port)) == 0:
+                        return True
+            except Exception:
+                pass
+        return False
+
+    def _resolve_mdns(self, hostname=None, timeout=2):
         """Attempts to resolve the Steam device via mDNS."""
+        if hostname is None:
+            hostname = self.hostname
         try:
-            with Zeroconf() as zeroconf:
-                infos = zeroconf.get_service_info('_http._tcp.local.', self.hostname, timeout * 1000)
-                if infos:
-                    return socket.inet_nta(infos[0].addresses[0])
+            zc = self._get_zeroconf()
+            infos = zc.get_service_info('_http._tcp.local.', hostname, timeout * 1000)
+            if infos and infos.addresses:
+                return socket.inet_nta(infos[0].addresses[0])
         except Exception:
             pass
         return None
 
     def resolve_mdns_multi(self, hostnames=None, timeout=2):
-        """Attempt resolution of multiple mDNS hostnames.
-
-        Args:
-            hostnames: list of hostname strings (default from config)
-            timeout: seconds to wait per hostname
-
-        Returns:
-            First resolved IP string, or None
-        """
+        """Attempt resolution of multiple mDNS hostnames."""
         if hostnames is None:
             hostnames = [
                 self.config.get('mdns_hostname', 'steamdeck.local'),
@@ -60,33 +75,18 @@ class SteamDetector:
                 self.config.get('mdns_hostname_3', 'steam-deck.local'),
             ]
         for hn in hostnames:
-            try:
-                with Zeroconf() as zeroconf:
-                    infos = zeroconf.get_service_info('_http._tcp.local.', hn, timeout * 1000)
-                    if infos and infos.addresses:
-                        ip = socket.inet_nta(infos[0].addresses[0])
-                        if ip:
-                            return ip
-            except Exception:
-                pass
+            ip = self._resolve_mdns(hn, timeout)
+            if ip:
+                return ip
         return None
 
     def probe_ports_multi(self, ip, ports=None, retries=1):
-        """Probe multiple ports on an IP with optional retries.
-
-        Args:
-            ip: target IP address
-            ports: list of port numbers
-            retries: number of times to retry each port
-
-        Returns:
-            True if any port responds, False otherwise
-        """
+        """Probe multiple ports on an IP with optional retries."""
         if ports is None:
             ports = [27036, 27016, 27017, 27015, 54985]
 
         for port in ports:
-            for attempt in range(retries):
+            for _ in range(retries):
                 try:
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                         s.settimeout(1)
@@ -118,7 +118,6 @@ class SteamDetector:
                     return {"ip": ip, "brand": "steam"}
 
         elif method == "HYBRID":
-            # Try mDNS first, fall back to port probe
             ip = self.resolve_mdns_multi()
             if ip and self._probe_port(ip):
                 return {"ip": ip, "brand": "steam"}
@@ -127,12 +126,3 @@ class SteamDetector:
                     return {"ip": ip, "brand": "steam"}
 
         return None
-
-
-if __name__ == "__main__":
-    import json
-    with open("config.json", 'r') as f:
-        config = json.load(f)
-    detector = SteamDetector(config)
-    result = detector.detect(["192.168.1.10"], mode="HYBRID")
-    print("Steam detected:", result)

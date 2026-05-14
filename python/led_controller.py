@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import secrets
 from abc import ABC, abstractmethod
 import logging
 
@@ -5,7 +8,7 @@ from colors import COLOR_MAP, Color
 
 logger = logging.getLogger(__name__)
 
-COLOR_MAP_LEGACY = COLOR_MAP
+COLOR_MAP_LEGACY = COLOR_MAP  # Backward compatibility alias
 
 
 class LEDController(ABC):
@@ -19,22 +22,30 @@ class LEDController(ABC):
         """Turns off the LED strip."""
         pass
 
-    def _to_rgb(self, color_name):
-        """Convert color name to RGB tuple."""
+    @staticmethod
+    def _to_rgb(color_name):
+        """Convert color name to RGB tuple.
+
+        Accepts:
+        - Named colors ("blue", "red", etc.)
+        - Hex strings ("#FF5500" or "FF5500")
+        - RGB tuples (255, 0, 0)
+
+        Falls back to white for unknown names.
+        """
         if isinstance(color_name, tuple):
             return color_name
-        color_name = color_name.lower().strip()
+        color_name = str(color_name).lower().strip()
         if color_name in COLOR_MAP:
             return COLOR_MAP[color_name]
 
-        if isinstance(color_name, str):
-            if color_name.startswith("#"):
-                color_name = color_name[1:]
-            if len(color_name) == 6:
-                try:
-                    return tuple(int(color_name[i:i+2], 16) for i in (0, 2, 4))
-                except ValueError:
-                    pass
+        if color_name.startswith("#"):
+            color_name = color_name[1:]
+        if len(color_name) == 6:
+            try:
+                return tuple(int(color_name[i:i+2], 16) for i in (0, 2, 4))
+            except ValueError:
+                pass
 
         logger.warning(f"Unknown color '{color_name}', defaulting to white")
         return COLOR_MAP["white"]
@@ -138,6 +149,11 @@ class RPiLEDController(LEDController):
             self.strip.show()
 
 
+def _to_rgb(color_name):
+    """Convert a color name, hex string, or tuple to an RGB tuple."""
+    return LEDController._to_rgb(color_name)
+
+
 def get_led_controller(config):
     lib = config['hardware']['led_library'].upper()
     if lib == "FASTLED":
@@ -148,17 +164,3 @@ def get_led_controller(config):
         return RPiLEDController(config)
     else:
         raise ValueError(f"Unsupported LED library: {lib}")
-
-
-def _to_rgb(color):
-    """Module-level convenience function matching LEDController._to_rgb behavior."""
-    return LEDController._to_rgb(None, color)
-
-
-if __name__ == "__main__":
-    import json
-    with open("config.json", 'r') as f:
-        conf = json.load(f)
-    ctrl = get_led_controller(conf)
-    ctrl.set_color("blue")
-    ctrl.off()

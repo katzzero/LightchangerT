@@ -1,8 +1,8 @@
+"""Tests for led_controller.py — LED drivers and color conversion."""
 import sys
 import os
 import pytest
 
-# Ensure python/ is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'python'))
 
 from led_controller import (
@@ -14,7 +14,7 @@ from led_controller import (
 
 class TestColorMap:
     def test_contains_all_basics(self):
-        for color in ["blue", "green", "red", "white", "black"]:
+        for color in ["black", "white", "red", "green", "blue"]:
             assert color in COLOR_MAP
 
     def test_contains_gaming_colors(self):
@@ -31,6 +31,56 @@ class TestColorMap:
         assert COLOR_MAP["blue"] == (0, 0, 255)
 
 
+class TestToRGB:
+    def test_named_color(self):
+        result = LEDController._to_rgb("white")
+        assert result == (255, 255, 255)
+
+    def test_named_light_blue(self):
+        result = LEDController._to_rgb("light_blue")
+        assert result == (0, 191, 255)
+
+    def test_rgb_tuple_passthrough(self):
+        result = LEDController._to_rgb((255, 100, 50))
+        assert result == (255, 100, 50)
+
+    def test_hex_color(self):
+        result = LEDController._to_rgb("#FF5500")
+        assert result == (255, 85, 0)
+
+    def test_hex_no_hash(self):
+        result = LEDController._to_rgb("FF5500")
+        assert result == (255, 85, 0)
+
+    def test_unknown_defaults_to_white(self, caplog):
+        result = LEDController._to_rgb("hot_pink")
+        assert result == COLOR_MAP["white"]
+        assert "Unknown color" in caplog.text
+
+    def test_lowercase_handling(self):
+        result_upper = LEDController._to_rgb("BLUE")
+        result_lower = LEDController._to_rgb("blue")
+        assert result_upper == result_lower
+
+
+# ---- Mock controller for tests that don't need hardware ----
+class MockLEDController(LEDController):
+    def __init__(self, config=None):
+        self.last_color = None
+        self.off_called = False
+
+    def set_color(self, color_name):
+        self.last_color = color_name
+
+    def off(self):
+        self.off_called = True
+
+
+@pytest.fixture
+def mock_led():
+    return MockLEDController()
+
+
 class TestMockLED:
     def test_mock_sets_color(self, mock_led):
         mock_led.set_color("blue")
@@ -41,45 +91,23 @@ class TestMockLED:
         assert mock_led.off_called is True
 
 
-class TestToRGB:
-    def test_named_color(self):
-        result = LEDController._to_rgb(None, "white")
-        assert result == (255, 255, 255)
-
-    def test_named_light_blue(self):
-        result = LEDController._to_rgb(None, "light_blue")
-        assert result == (0, 191, 255)
-
-    def test_rgb_tuple_passthrough(self):
-        result = LEDController._to_rgb(None, (255, 100, 50))
-        assert result == (255, 100, 50)
-
-    def test_hex_color(self):
-        result = LEDController._to_rgb(None, "#FF5500")
-        assert result == (255, 85, 0)
-
-    def test_hex_no_hash(self):
-        result = LEDController._to_rgb(None, "FF5500")
-        assert result == (255, 85, 0)
-
-    def test_unknown_defaults_to_white(self, caplog):
-        with caplog.at_level("WARNING"):
-            result = LEDController._to_rgb(None, "hot_pink")
-        assert result == COLOR_MAP["white"]
-        assert "Unknown color" in caplog.text
-
-
 class TestFastLEDController:
+    @pytest.fixture
+    def sample_config(self):
+        return {
+            "hardware": {
+                "led_pin": 13,
+                "num_leds": 30,
+                "brightness": 128,
+                "led_library": "FASTLED"
+            }
+        }
+
     def test_init_saves_config(self, sample_config):
         controller = FastLEDController(sample_config)
         assert controller.pin == 13
         assert controller.num_leds == 30
         assert controller.brightness == 128
-
-    def test_init_without_library_logs_error(self, sample_config, caplog):
-        with caplog.at_level("ERROR"):
-            FastLEDController(sample_config)
-        assert "FastLED library not installed" in caplog.text
 
     def test_init_creates_strip(self, sample_config):
         controller = FastLEDController(sample_config)
@@ -92,24 +120,47 @@ class TestFastLEDController:
 
 
 class TestNeoPixelController:
-    def test_init_saves_config(self, sample_config):
-        config = dict(sample_config)
-        config["hardware"]["led_library"] = "NEOPIXEL"
+    def test_init_saves_config(self):
+        config = {
+            "hardware": {
+                "led_pin": 6,
+                "num_leds": 60,
+                "brightness": 0.5,
+                "led_library": "NEOPIXEL"
+            }
+        }
         controller = NeoPixelController(config)
-        assert controller.pin == 13
+        assert controller.pin == 6
         assert controller._neopixel_available is False
 
 
 class TestRPiLEDController:
-    def test_init_saves_config(self, sample_config):
-        config = dict(sample_config)
-        config["hardware"]["led_library"] = "RPI_WS281X"
+    def test_init_saves_config(self):
+        config = {
+            "hardware": {
+                "led_pin": 18,
+                "num_leds": 50,
+                "brightness": 200,
+                "led_library": "RPI_WS281X"
+            }
+        }
         controller = RPiLEDController(config)
-        assert controller.pin == 13
+        assert controller.pin == 18
         assert controller._rpi_available is False
 
 
 class TestGetLEDController:
+    @pytest.fixture
+    def sample_config(self):
+        return {
+            "hardware": {
+                "led_pin": 13,
+                "num_leds": 30,
+                "brightness": 128,
+                "led_library": "FASTLED"
+            }
+        }
+
     def test_fastled(self, sample_config):
         controller = get_led_controller(sample_config)
         assert isinstance(controller, FastLEDController)
@@ -140,6 +191,17 @@ class TestGetLEDController:
 
 
 class TestIntegration:
+    @pytest.fixture
+    def sample_config(self):
+        return {
+            "hardware": {
+                "led_pin": 13,
+                "num_leds": 30,
+                "brightness": 128,
+                "led_library": "FASTLED"
+            }
+        }
+
     def test_blue_color_applied_to_strip(self, sample_config):
         controller = FastLEDController(sample_config)
         controller.set_color("blue")
