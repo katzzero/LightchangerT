@@ -76,6 +76,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .error { color: #cf6679; }
     .info-box { background: #2d2d2d; padding: 12px; border-radius: 6px; margin-top: 15px; font-size: 13px; color: #aaa; }
     .warning { color: #cf6679; font-size: 13px; margin-top: 10px; }
+    .section { margin-top: 25px; border-top: 1px solid #444; padding-top: 15px; }
+    .section-title { color: #bb86fc; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+    .toggle { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .toggle input[type="checkbox"] { width: auto; }
   </style>
 </head>
 <body>
@@ -83,6 +87,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <h1>LightchangerT Configuration</h1>
     <form method="post" action="/save">
       <input type="hidden" name="csrf_token" value="%(csrf_token)s">
+
+      <label>LED Library</label>
+      <select name="hardware_led_library">
+        <option value="FASTLED" %(lib_fastled)s>FastLED (WS2812B direct)</option>
+        <option value="NEOPIXEL" %(lib_neopixel)s>NeoPixel (CircuitPython)</option>
+        <option value="RPI_WS281X" %(lib_rpi)s>RPi WS281X (Raspberry Pi)</option>
+        <option value="TUYA" %(lib_tuya)s>Tuya Smart LED (WiFi)</option>
+      </select>
+
+      <div class="section">
+        <div class="section-title">Tuya Smart LED Settings</div>
+        <label>Device ID</label>
+        <input type="text" name="tuya_device_id" value="%(tuya_device_id)s" placeholder="e.g. 0123456789abcdef012345">
+        <label>IP Address</label>
+        <input type="text" name="tuya_address" value="%(tuya_address)s" placeholder="e.g. 192.168.1.100">
+        <label>Local Key</label>
+        <input type="text" name="tuya_local_key" value="%(tuya_local_key)s" placeholder="e.g. 0123456789abcdef">
+        <label>Protocol Version</label>
+        <select name="tuya_version">
+          <option value="3.3" %(tuya_v33)s>3.3 (default, most devices)</option>
+          <option value="3.1" %(tuya_v31)s>3.1 (older devices)</option>
+        </select>
+        <div class="info-box">Find your Device ID and Local Key using the Tuya app or <code>tinytuya wizard</code> CLI tool.</div>
+      </div>
 
       <label>Network Scan Interval (seconds)</label>
       <input type="number" name="network_scan_interval_seconds" value="%(scan_interval)s" min="1" max="3600">
@@ -158,11 +186,16 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
             cm = _load_config_manager()
             config = cm.get()
 
+            hardware = config.get('hardware', {})
+            tuya = hardware.get('tuya', {})
+            led_lib = hardware.get('led_library', 'FASTLED').upper()
+            tuya_ver = str(tuya.get('version', 3.3))
+
             scan_interval = config.get('network', {}).get('scan_interval_seconds', 30)
             mode = config.get('network', {}).get('detection_mode', 'HYBRID')
             static_devices = json.dumps(config.get('devices', {}).get('static_list', []), indent=2)
             colors = json.dumps(config.get('colors', {}), indent=2)
-            hardware = json.dumps(config.get('hardware', {}), indent=2)
+            hardware_json = json.dumps(hardware, indent=2)
 
             csrf_token = generate_csrf_token()
 
@@ -173,10 +206,19 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
                 "mode_auto": "selected" if mode == "AUTO" else "",
                 "static_devices": static_devices.replace("<", "&lt;").replace(">", "&gt;"),
                 "colors": colors.replace("<", "&lt;").replace(">", "&gt;"),
-                "hardware": hardware.replace("<", "&lt;").replace(">", "&gt;"),
+                "hardware": hardware_json.replace("<", "&lt;").replace(">", "&gt;"),
                 "csrf_token": csrf_token,
                 "message": "Current Configuration Loaded",
                 "status_class": "",
+                "lib_fastled": "selected" if led_lib == "FASTLED" else "",
+                "lib_neopixel": "selected" if led_lib == "NEOPIXEL" else "",
+                "lib_rpi": "selected" if led_lib in ("RPI_WS281X", "RPI_WS2812", "WS281X") else "",
+                "lib_tuya": "selected" if led_lib == "TUYA" else "",
+                "tuya_device_id": tuya.get('device_id', ''),
+                "tuya_address": tuya.get('address', ''),
+                "tuya_local_key": tuya.get('local_key', ''),
+                "tuya_v33": "selected" if tuya_ver == "3.3" else "",
+                "tuya_v31": "selected" if tuya_ver == "3.1" else "",
             }
 
             self.send_response(200)
@@ -203,7 +245,7 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
     def _handle_save(self):
         try:
             content_length = int(self.headers.get("Content-Length", 0))
-            if content_length > 100000:  # 100KB limit
+            if content_length > 100000:
                 self.send_error(413, "Payload too large")
                 return
 
@@ -211,7 +253,6 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
             params = parse_qs(post_data, keep_blank_values=True)
             params = {k: v[0] if v else "" for k, v in params.items()}
 
-            # Validate CSRF token
             if not validate_csrf(params.get("csrf_token", "")):
                 self.send_response(403)
                 self.end_headers()
@@ -221,6 +262,32 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
             cm = _load_config_manager()
             config = cm.get()
             validation_errors = []
+
+            # LED library selection
+            if "hardware_led_library" in params:
+                lib = params["hardware_led_library"].upper()
+                if lib in ("FASTLED", "NEOPIXEL", "RPI_WS281X", "TUYA"):
+                    if "hardware" not in config:
+                        config["hardware"] = {}
+                    config["hardware"]["led_library"] = lib
+
+            # Tuya settings
+            if "hardware" not in config:
+                config["hardware"] = {}
+            if "tuya" not in config["hardware"]:
+                config["hardware"]["tuya"] = {}
+            tuya = config["hardware"]["tuya"]
+            if "tuya_device_id" in params:
+                tuya["device_id"] = params["tuya_device_id"]
+            if "tuya_address" in params:
+                tuya["address"] = params["tuya_address"]
+            if "tuya_local_key" in params:
+                tuya["local_key"] = params["tuya_local_key"]
+            if "tuya_version" in params:
+                try:
+                    tuya["version"] = float(params["tuya_version"])
+                except ValueError:
+                    validation_errors.append("Tuya version must be 3.1 or 3.3")
 
             if "network_scan_interval_seconds" in params:
                 try:

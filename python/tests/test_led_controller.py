@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from led_controller import (
     LEDController, Color, FastLEDController,
-    NeoPixelController, RPiLEDController,
+    NeoPixelController, RPiLEDController, TuyaLEDController,
     COLOR_MAP, get_led_controller
 )
 
@@ -149,6 +149,51 @@ class TestRPiLEDController:
         assert controller._rpi_available is False
 
 
+class TestTuyaLEDController:
+    def test_init_reads_tuya_config(self):
+        config = {
+            "hardware": {
+                "led_library": "TUYA",
+                "brightness": 80,
+                "tuya": {
+                    "device_id": "abc123",
+                    "address": "192.168.1.50",
+                    "local_key": "key456",
+                    "version": 3.3
+                }
+            }
+        }
+        controller = TuyaLEDController(config)
+        assert controller.device_id == "abc123"
+        assert controller.address == "192.168.1.50"
+        assert controller.local_key == "key456"
+        assert controller.version == 3.3
+        assert controller.brightness == 80
+        # tinytuya not installed in test env
+        assert controller._device is None
+
+    def test_init_defaults_version(self):
+        config = {
+            "hardware": {
+                "led_library": "TUYA",
+                "tuya": {
+                    "device_id": "abc",
+                    "address": "1.2.3.4",
+                    "local_key": "key"
+                }
+            }
+        }
+        controller = TuyaLEDController(config)
+        assert controller.version == 3.3
+
+    def test_init_handles_missing_tuya_section(self):
+        config = {"hardware": {"led_library": "TUYA"}}
+        controller = TuyaLEDController(config)
+        assert controller.device_id == ""
+        assert controller.address == ""
+        assert controller._device is None
+
+
 class TestGetLEDController:
     @pytest.fixture
     def sample_config(self):
@@ -182,6 +227,17 @@ class TestGetLEDController:
         config["hardware"]["led_library"] = "RPI_WS2812"
         controller = get_led_controller(config)
         assert isinstance(controller, RPiLEDController)
+
+    def test_tuya(self, sample_config):
+        config = dict(sample_config)
+        config["hardware"]["led_library"] = "TUYA"
+        config["hardware"]["tuya"] = {
+            "device_id": "abc",
+            "address": "1.2.3.4",
+            "local_key": "key"
+        }
+        controller = get_led_controller(config)
+        assert isinstance(controller, TuyaLEDController)
 
     def test_unsupported_library_raises(self, sample_config):
         config = dict(sample_config)

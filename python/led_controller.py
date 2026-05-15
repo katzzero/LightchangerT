@@ -149,6 +149,69 @@ class RPiLEDController(LEDController):
             self.strip.show()
 
 
+class TuyaLEDController(LEDController):
+    """Controls Tuya-compatible smart LED strips via local network (tinytuya).
+
+    Requires:
+        device_id: Tuya device ID
+        address: IP address of the device
+        local_key: Tuya device local key
+        version: Protocol version (3.1 or 3.3, default 3.3)
+    """
+
+    def __init__(self, config):
+        tuya_cfg = config.get('hardware', {}).get('tuya', {})
+        self.device_id = tuya_cfg.get('device_id', '')
+        self.address = tuya_cfg.get('address', '')
+        self.local_key = tuya_cfg.get('local_key', '')
+        self.version = float(tuya_cfg.get('version', 3.3))
+        self.brightness = config.get('hardware', {}).get('brightness', 100)
+        self._device = None
+
+        try:
+            import tinytuya
+            self._device = tinytuya.OutletDevice(
+                self.device_id,
+                self.address,
+                self.local_key,
+                dev_type='default',
+                version=self.version
+            )
+            self._device.set_socketPersistent(True)
+            logger.info(f"Tuya device initialized: {self.device_id} at {self.address}")
+        except ImportError:
+            logger.error("tinytuya library not installed. Run: pip install tinytuya")
+        except Exception as e:
+            logger.error(f"Failed to initialize Tuya device: {e}")
+
+    def set_color(self, color_name):
+        rgb = self._to_rgb(color_name)
+        hex_color = '%02x%02x%02x' % rgb
+        if self._device:
+            try:
+                payload = self._device.generate_payload(
+                    tinytuya.CONTROL,
+                    {
+                        '20': hex_color,
+                        '21': 'colour',
+                        '22': self.brightness * 10,
+                        '23': 1000
+                    }
+                )
+                self._device._send_receive(payload)
+            except Exception as e:
+                logger.error(f"Tuya set_color failed: {e}")
+
+    def off(self):
+        if self._device:
+            try:
+                import tinytuya
+                payload = self._device.generate_payload(tinytuya.CONTROL, {'20': '000000', '21': 'white'})
+                self._device._send_receive(payload)
+            except Exception as e:
+                logger.error(f"Tuya off failed: {e}")
+
+
 def _to_rgb(color_name):
     """Convert a color name, hex string, or tuple to an RGB tuple."""
     return LEDController._to_rgb(color_name)
@@ -162,5 +225,7 @@ def get_led_controller(config):
         return NeoPixelController(config)
     elif lib in ("RPI_WS281X", "RPI_WS2812", "WS281X"):
         return RPiLEDController(config)
+    elif lib == "TUYA":
+        return TuyaLEDController(config)
     else:
         raise ValueError(f"Unsupported LED library: {lib}")
