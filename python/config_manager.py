@@ -22,6 +22,7 @@ class ConfigManager:
                     cls._instance = super().__new__(cls)
                     cls._instance._config = None
                     cls._instance._path = CONFIG_FILE
+                    cls._instance._running = False
         return cls._instance
 
     def load(self, config_path=None):
@@ -104,7 +105,7 @@ class ConfigManager:
             while self._running:
                 try:
                     with open(self._path, 'rb') as f:
-                        current_hash = hashlib.md5(f.read()).hexdigest()
+                        current_hash = hashlib.sha256(f.read()).hexdigest()
                     if current_hash != last_hash:
                         last_hash = current_hash
                         with self._config_lock:

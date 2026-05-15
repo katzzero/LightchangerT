@@ -26,7 +26,7 @@ LivenessEngine liveness;
 SteamDetector steam;
 
 WebServer server(80);
-WiFiServer commandServer(COMMAND_PORT_DEFAULT);
+WiFiServer* commandServer = nullptr;
 
 std::map<String, unsigned long> lastSeen;
 std::map<String, int> missedCycles;
@@ -75,7 +75,7 @@ void trySTAConnect() {
     Serial.print("Connecting to WiFi: ");
     Serial.println(ssid);
 
-    wifiConnectStart = millis();
+    wifiReconnectStart = millis();
     wifiReconnecting = true;
 }
 
@@ -287,7 +287,8 @@ void handleDeviceDelete() {
 }
 
 void handleNotFound() {
-    server.sendHeader("Location", "http://lightchanger.local", true);
+    String redirectUrl = "http://" + WiFi.localIP().toString();
+    server.sendHeader("Location", redirectUrl, true);
     server.send(302, "text/html", "");
 }
 
@@ -404,9 +405,9 @@ void setup() {
     wwwPassword = configManager.getWebPassword();
     authEnabled = configManager.hasWebCredentials();
 
-    // Load command port from NVS
+    // Load command port from NVS and create server
     uint16_t cmdPort = configManager.getCommandPort();
-    commandServer = WiFiServer(cmdPort);
+    commandServer = new WiFiServer(cmdPort);
 
     if (!MDNS.begin(MDNS_HOSTNAME)) {
         Serial.println("Error setting up MDNS responder!");
@@ -431,7 +432,7 @@ void setup() {
     }
 
     server.begin();
-    commandServer.begin();
+    commandServer->begin();
 
     // Start OTA
     begin_ota();
@@ -455,8 +456,8 @@ void loop() {
     handleWiFiDisconnect();
 
     // Handle one-shot command server clients (non-blocking)
-    if (commandServer.hasClient()) {
-        WiFiClient cmdClient = commandServer.available();
+    if (commandServer && commandServer->hasClient()) {
+        WiFiClient cmdClient = commandServer->available();
         handleCommandClient(cmdClient);
     }
 

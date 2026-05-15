@@ -41,8 +41,8 @@ DEFAULT_CONFIG = os.path.join(BASE_DIR, "config.json")
 class GameStateController:
     def __init__(self, config_path=None):
         self.cm = get_config_manager()
-        config_path = config_path or DEFAULT_CONFIG
-        self.config = self.cm.load(config_path)
+        self._config_path = config_path or DEFAULT_CONFIG
+        self.config = self.cm.load(self._config_path)
 
         self._running = True
         self._web_thread = None
@@ -81,7 +81,7 @@ class GameStateController:
         If changed, reload and reinitialize subsystems.
         """
         try:
-            mtime = os.path.getmtime(DEFAULT_CONFIG)
+            mtime = os.path.getmtime(self._config_path)
             if mtime != self._last_config_mtime:
                 logger.info("Config file changed on disk, reloading...")
                 self.config = self.cm.reload()
@@ -193,10 +193,11 @@ class GameStateController:
                     logger.exception(f"Error in update cycle: {e}")
 
                 # Sleep in small intervals to respond to signals faster
-                for _ in range(int(interval * 2)):
+                sleep_end = time.time() + interval
+                while time.time() < sleep_end:
                     if not self._running:
                         break
-                    time.sleep(0.5)
+                    time.sleep(min(0.5, sleep_end - time.time()))
         except KeyboardInterrupt:
             pass
         finally:

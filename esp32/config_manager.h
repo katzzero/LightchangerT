@@ -58,6 +58,17 @@ public:
 
     void addDevice(String ip, String brand) {
         String current = prefs.getString(KEY_DEVICES, "");
+        if (current.length() > 3500) {
+            // NVS has ~4000 byte limit per key, truncate oldest entries
+            int firstSemi = current.indexOf(';');
+            if (firstSemi != -1) {
+                current = current.substring(firstSemi + 1);
+            }
+        }
+        // Escape delimiter characters in input
+        ip.replace("|", "%7C");
+        brand.replace("|", "%7C");
+        brand.replace(";", "%3B");
         current += ip + "|" + brand + ";";
         prefs.putString(KEY_DEVICES, current);
     }
@@ -76,6 +87,10 @@ public:
                 DeviceConfig dev;
                 dev.ip = item.substring(0, sep);
                 dev.brand = item.substring(sep + 1);
+                // Unescape delimiter characters
+                dev.ip.replace("%7C", "|");
+                dev.brand.replace("%7C", "|");
+                dev.brand.replace("%3B", ";");
                 deviceList.push_back(dev);
             }
             start = end + 1;

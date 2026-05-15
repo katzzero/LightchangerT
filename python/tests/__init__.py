@@ -1,2 +1,1 @@
-# tests package
-from led_controller import LEDController, Color, FastLEDController, NeoPixelController, RPiLEDController, COLOR_MAP, get_led_controller
+# tests package - imports handled in conftest.py to ensure sys.path is correct

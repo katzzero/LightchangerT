@@ -29,9 +29,9 @@ class LivenessEngine:
         """
         system = platform.system().lower()
         if system == "windows":
-            command = ["ping", "-n", "1", "-W", "1000", ip]
+            command = ["ping", "-n", "1", "-w", "1000", ip]
         elif system == "darwin":
-            command = ["ping", "-c", "1", "-t", "2", ip]
+            command = ["ping", "-c", "1", "-W", "2", ip]
         else:
             command = ["ping", "-c", "1", "-W", "2", ip]
 

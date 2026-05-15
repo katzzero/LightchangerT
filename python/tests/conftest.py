@@ -5,7 +5,8 @@ import pytest
 # Ensure python/ is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'python'))
 
-from led_controller import LEDController, Color, FastLEDController, NeoPixelController, RPiLEDController, COLOR_MAP, get_led_controller
+from led_controller import LEDController, FastLEDController, NeoPixelController, RPiLEDController, COLOR_MAP, get_led_controller
+from colors import Color
 
 
 @pytest.fixture

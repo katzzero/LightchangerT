@@ -6,10 +6,11 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'python'))
 
 from led_controller import (
-    LEDController, Color, FastLEDController,
+    LEDController, FastLEDController,
     NeoPixelController, RPiLEDController, TuyaLEDController,
     COLOR_MAP, get_led_controller
 )
+from colors import Color
 
 
 class TestColorMap:
@@ -169,8 +170,8 @@ class TestTuyaLEDController:
         assert controller.local_key == "key456"
         assert controller.version == 3.3
         assert controller.brightness == 80
-        # tinytuya not installed in test env
-        assert controller._device is None
+        # Native protocol (no external tinytuya needed) - device object created
+        assert controller._device is not None
 
     def test_init_defaults_version(self):
         config = {

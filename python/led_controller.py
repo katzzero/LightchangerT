@@ -1,10 +1,8 @@
-import hashlib
-import hmac
-import secrets
 from abc import ABC, abstractmethod
 import logging
 
-from colors import COLOR_MAP, Color
+from colors import COLOR_MAP
+from tuya_protocol import TuyaDevice, CONTROL
 
 logger = logging.getLogger(__name__)
 
@@ -168,19 +166,18 @@ class TuyaLEDController(LEDController):
         self.brightness = config.get('hardware', {}).get('brightness', 100)
         self._device = None
 
+        if not self.device_id or not self.address or not self.local_key:
+            logger.warning("Tuya device not configured (missing device_id, address, or local_key)")
+            return
+
         try:
-            import tinytuya
-            self._device = tinytuya.OutletDevice(
+            self._device = TuyaDevice(
                 self.device_id,
                 self.address,
                 self.local_key,
-                dev_type='default',
                 version=self.version
             )
-            self._device.set_socketPersistent(True)
             logger.info(f"Tuya device initialized: {self.device_id} at {self.address}")
-        except ImportError:
-            logger.error("tinytuya library not installed. Run: pip install tinytuya")
         except Exception as e:
             logger.error(f"Failed to initialize Tuya device: {e}")
 
@@ -189,8 +186,8 @@ class TuyaLEDController(LEDController):
         hex_color = '%02x%02x%02x' % rgb
         if self._device:
             try:
-                payload = self._device.generate_payload(
-                    tinytuya.CONTROL,
+                self._device.send_command(
+                    CONTROL,
                     {
                         '20': hex_color,
                         '21': 'colour',
@@ -198,16 +195,13 @@ class TuyaLEDController(LEDController):
                         '23': 1000
                     }
                 )
-                self._device._send_receive(payload)
             except Exception as e:
                 logger.error(f"Tuya set_color failed: {e}")
 
     def off(self):
         if self._device:
             try:
-                import tinytuya
-                payload = self._device.generate_payload(tinytuya.CONTROL, {'20': '000000', '21': 'white'})
-                self._device._send_receive(payload)
+                self._device.send_command(CONTROL, {'20': '000000', '21': 'white'})
             except Exception as e:
                 logger.error(f"Tuya off failed: {e}")
 
@@ -218,7 +212,10 @@ def _to_rgb(color_name):
 
 
 def get_led_controller(config):
-    lib = config['hardware']['led_library'].upper()
+    hardware = config.get('hardware', {})
+    lib = hardware.get('led_library', '').upper()
+    if not lib:
+        raise ValueError("Missing 'hardware.led_library' in config")
     if lib == "FASTLED":
         return FastLEDController(config)
     elif lib == "NEOPIXEL":

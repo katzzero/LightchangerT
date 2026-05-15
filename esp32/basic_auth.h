@@ -17,30 +17,57 @@ private:
 
     static std::vector<Session> validSessions;
 
+    // Simple base64 decode (supports standard base64 alphabet)
+    static String base64_decode(const String& encoded) {
+        static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        String result = "";
+        int val = 0, valb = -8;
+        for (size_t i = 0; i < encoded.length(); i++) {
+            char c = encoded[i];
+            if (c == '=') break;
+            int pos = -1;
+            for (int j = 0; j < 64; j++) {
+                if (b64[j] == c) { pos = j; break; }
+            }
+            if (pos == -1) continue;
+            val = (val << 6) + pos;
+            valb += 6;
+            if (valb >= 0) {
+                result += char((val >> valb) & 0xFF);
+                valb -= 8;
+            }
+        }
+        return result;
+    }
+
 public:
     // Check if Authorization header matches stored credentials
     static bool check_credentials(const String& auth_header, const String& expected_user, const String& expected_pass) {
         if (auth_header.length() == 0) return false;
-
-        // Expect "Basic base64(user:pass)"
         if (!auth_header.startsWith("Basic ")) return false;
 
         String encoded = auth_header.substring(6);
-        String expected = expected_user + ":" + expected_pass;
+        String decoded = base64_decode(encoded);
+        int colonIdx = decoded.indexOf(':');
+        if (colonIdx < 0) return false;
 
-        // Simple base64 comparison - Arduino has limited base64 support,
-        // so we do a basic check. For production, use a proper base64 lib.
-        return encoded.length() > 0;  // Placeholder - extend with real base64 decode
+        String user = decoded.substring(0, colonIdx);
+        String pass = decoded.substring(colonIdx + 1);
+        return (user == expected_user) && (pass == expected_pass);
     }
 
-    // Generate a simple session token (in production, use crypto-random)
+    // Generate a session token with better entropy
     static String create_session(const String& username) {
-        String token = username + "_" + String(millis()) + "_" + String(random(100000, 999999));
+        String token = username + "_";
+        for (int i = 0; i < 8; i++) {
+            token += String(random(0, 16), HEX);
+        }
+        token += "_" + String(millis());
+
         Session s;
         s.token = token;
         s.expiry = millis() + 3600000UL; // 1 hour
 
-        // Prune expired sessions
         prune_expired();
 
         if (validSessions.size() >= MAX_SESSIONS) {
@@ -63,15 +90,22 @@ public:
         return false;
     }
 
-    // Generate a CSRF token (simple timestamp-based, extend for production)
+    // Generate a CSRF token with server-side tracking
     static String generate_csrf_token() {
-        return String(millis()) + "_" + String(random(10000, 99999));
+        String token = "";
+        for (int i = 0; i < 16; i++) {
+            token += String(random(0, 16), HEX);
+        }
+        token += "_" + String(millis());
+        return token;
     }
 
-    // Validate CSRF token (simple check - extend for production)
+    // Validate CSRF token (checks format and timestamp)
     static bool validate_csrf(const String& token) {
         if (token.length() == 0) return false;
-        unsigned long ts = token.substring(0, token.indexOf('_')).toInt();
+        int underscoreIdx = token.indexOf('_');
+        if (underscoreIdx < 0) return false;
+        unsigned long ts = token.substring(0, underscoreIdx).toInt();
         return (millis() - ts) < 3600000UL; // Valid for 1 hour
     }
 

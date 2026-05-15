@@ -61,7 +61,7 @@ class SteamDetector:
             zc = self._get_zeroconf()
             infos = zc.get_service_info('_http._tcp.local.', hostname, timeout * 1000)
             if infos and infos.addresses:
-                return socket.inet_nta(infos[0].addresses[0])
+                return socket.inet_ntoa(infos.addresses[0])
         except Exception:
             pass
         return None

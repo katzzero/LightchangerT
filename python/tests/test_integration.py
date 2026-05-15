@@ -94,8 +94,8 @@ class TestFullPipeline:
             assert isinstance(last, str)
 
     def test_all_components_have_expected_attributes(self):
-        from colors import BRAND_COLORS
-        from led_controller import LEDController, get_led_controller, _to_rgb, COLOR_MAP, Color
+        from colors import BRAND_COLORS, Color
+        from led_controller import LEDController, get_led_controller, _to_rgb, COLOR_MAP
 
         assert callable(NetworkScanner)
         assert callable(LivenessEngine)

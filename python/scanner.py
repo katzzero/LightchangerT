@@ -67,7 +67,8 @@ class NetworkScanner:
         """Parse ARP table on Windows."""
         entries = []
         try:
-            output = subprocess.check_output(["arp", "-a"], timeout=10).decode('cp1252')
+            raw_output = subprocess.check_output(["arp", "-a"], timeout=10)
+            output = raw_output.decode('utf-8', errors='replace')
             in_table = False
             for line in output.split('\n'):
                 line = line.strip()
@@ -77,7 +78,7 @@ class NetworkScanner:
                 if in_table and line:
                     parts = line.split()
                     if len(parts) >= 2 and re.match(r'^\d+\.\d+\.\d+\.\d+$', parts[0]):
-                        mac = parts[1] if len(parts) > 1 else ""
+                        mac = parts[1]
                         if mac != "ff-ff-ff-ff-ff-ff":
                             entries.append({"ip": parts[0], "mac": mac})
                 elif in_table and not line:

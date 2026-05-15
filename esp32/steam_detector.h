@@ -18,13 +18,14 @@ public:
                         return true;
                     }
                 }
+                yield();
             }
 
             for (const auto& ip : activeIps) {
                 if (probePort(ip)) {
                     return true;
                 }
-                delay(10);
+                yield();
             }
         }
         return false;
@@ -39,7 +40,7 @@ private:
                 client.stop();
                 return true;
             }
-            delay(STEAM_PROBE_TIMEOUT_MS / STEAM_TOTAL_PORTS);
+            yield();
         }
         return false;
     }

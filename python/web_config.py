@@ -5,6 +5,7 @@ import logging
 import hashlib
 import hmac
 import secrets
+import time
 from urllib.parse import parse_qs
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -13,23 +14,34 @@ logger = logging.getLogger(__name__)
 CONFIG_FILE = "config.json"
 
 
-# ---- CSRF token storage (in-memory, per-process) ----
-_csrf_tokens = set()
+# ---- CSRF token storage (in-memory, per-process, with TTL) ----
+_csrf_tokens = {}
+CSRF_TOKEN_TTL = 3600
 
 
 def generate_csrf_token():
-    """Generate a new CSRF token and store it."""
+    """Generate a new CSRF token and store it with expiration."""
     token = secrets.token_hex(32)
-    _csrf_tokens.add(token)
+    _csrf_tokens[token] = time.time() + CSRF_TOKEN_TTL
+    _prune_expired_csrf()
     return token
 
 
 def validate_csrf(token):
     """Validate a CSRF token and remove it (single-use)."""
-    if token in _csrf_tokens:
-        _csrf_tokens.discard(token)
+    expiry = _csrf_tokens.get(token)
+    if expiry and time.time() < expiry:
+        _csrf_tokens.pop(token, None)
         return True
     return False
+
+
+def _prune_expired_csrf():
+    """Remove expired CSRF tokens to prevent memory leak."""
+    now = time.time()
+    expired = [t for t, exp in _csrf_tokens.items() if now >= exp]
+    for t in expired:
+        _csrf_tokens.pop(t, None)
 
 
 def _constant_time_compare(a, b):
@@ -109,7 +121,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <option value="3.3" %(tuya_v33)s>3.3 (default, most devices)</option>
           <option value="3.1" %(tuya_v31)s>3.1 (older devices)</option>
         </select>
-        <div class="info-box">Find your Device ID and Local Key using the Tuya app or <code>tinytuya wizard</code> CLI tool.</div>
+        <div class="info-box">Find your Device ID and Local Key via the Tuya Smart/Smart Life app (device info) or <code>pip install tinytuya && tinytuya wizard</code> CLI.</div>
       </div>
 
       <label>Network Scan Interval (seconds)</label>
@@ -199,7 +211,7 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
 
             csrf_token = generate_csrf_token()
 
-            html = HTML_TEMPLATE % {
+            template_values = {
                 "scan_interval": scan_interval,
                 "mode_hybrid": "selected" if mode == "HYBRID" else "",
                 "mode_static": "selected" if mode == "STATIC_LIST" else "",
@@ -220,6 +232,9 @@ class ConfigRequestHandler(BaseHTTPRequestHandler):
                 "tuya_v33": "selected" if tuya_ver == "3.3" else "",
                 "tuya_v31": "selected" if tuya_ver == "3.1" else "",
             }
+            template_values = {k: str(v).replace("%", "%%") for k, v in template_values.items()}
+
+            html = HTML_TEMPLATE % template_values
 
             self.send_response(200)
             self.send_header("Content-type", "text/html; charset=utf-8")

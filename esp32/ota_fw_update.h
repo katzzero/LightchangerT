@@ -2,10 +2,10 @@
 // Include this in esp32.ino after the existing includes
 // and call begin_ota() in setup() and handle_ota() in loop()
 
-#include <ArduinoOTA.h>
-
 #ifndef OTA_FW_UPDATE_H
 #define OTA_FW_UPDATE_H
+
+#include <ArduinoOTA.h>
 
 void begin_ota() {
     // Port defaults to 3232
