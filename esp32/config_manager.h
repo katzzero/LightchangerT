@@ -15,9 +15,7 @@ class ConfigManager {
 private:
     Preferences prefs;
     const char* NVS_NAMESPACE = "lightchanger";
-    const uint16_t CMD_PORT_DEFAULT = COMMAND_PORT_DEFAULT;
 
-    // NVS key constants
     static const char* KEY_SSID;
     static const char* KEY_PASSWORD;
     static const char* KEY_SCAN_INTERVAL;
@@ -30,6 +28,30 @@ private:
 public:
     void begin() {
         prefs.begin(NVS_NAMESPACE, false);
+    }
+
+    // ---- Web UI Authentication (stored separately from WiFi credentials) ----
+
+    void setWebCredentials(String username, String password) {
+        if (username.length() > 0) {
+            prefs.putString(NVS_KEY_WEB_USER, username);
+            prefs.putString(NVS_KEY_WEB_PASS, password);
+        } else {
+            prefs.remove(NVS_KEY_WEB_USER);
+            prefs.remove(NVS_KEY_WEB_PASS);
+        }
+    }
+
+    String getWebUsername() {
+        return prefs.getString(NVS_KEY_WEB_USER, "");
+    }
+
+    String getWebPassword() {
+        return prefs.getString(NVS_KEY_WEB_PASS, "");
+    }
+
+    bool hasWebCredentials() {
+        return prefs.getString(NVS_KEY_WEB_USER, "").length() > 0;
     }
 
     // ---- Device Management ----
@@ -78,7 +100,7 @@ public:
     // ---- Command Port ----
 
     uint16_t getCommandPort() {
-        return prefs.getUShort(KEY_CMD_PORT, CMD_PORT_DEFAULT);
+        return prefs.getUShort(KEY_CMD_PORT, COMMAND_PORT_DEFAULT);
     }
 
     void setCommandPort(uint16_t port) {

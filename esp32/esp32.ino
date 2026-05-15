@@ -37,13 +37,18 @@ const unsigned long scanInterval = SCAN_INTERVAL_MS;
 bool wifiConnected = false;
 bool wifiReconnecting = false;
 unsigned long wifiReconnectStart = 0;
-const unsigned long WIFI_RECONNECT_INTERVAL = 5000;
 const unsigned long WIFI_CONNECT_TIMEOUT = 15000;
 
-// Auth credentials (loaded from NVS or defaults)
+// Web UI auth credentials (stored in NVS under separate keys from WiFi)
 String wwwUsername = "";
 String wwwPassword = "";
 bool authEnabled = false;
+
+// Captive portal AP credentials
+const char* AP_SSID = "Lightchanger-Setup";
+const char* AP_PASSWORD = "lightchanger";
+const int MAX_FAILED_ATTEMPTS = 5;
+const unsigned long AP_CONNECT_TIMEOUT = 15000;
 
 Color getColorForBrand(String brand) {
     for (int i = 0; i < NUM_BRAND_COLORS; i++) {
@@ -287,15 +292,12 @@ void handleNotFound() {
 }
 
 // ---- Captive Portal AP mode ----
-unsigned long apConnectStart = 0;
-const unsigned long AP_CONNECT_TIMEOUT = 15000;
-
 bool shouldStartAPMode() {
     if (!configManager.hasWifiCredentials()) {
         Serial.println("No WiFi credentials stored - starting AP mode");
         return true;
     }
-    if (configManager.getFailedAttempts() >= 5) {
+    if (configManager.getFailedAttempts() >= MAX_FAILED_ATTEMPTS) {
         Serial.println("Too many failed connection attempts - starting AP mode");
         return true;
     }
@@ -304,14 +306,15 @@ bool shouldStartAPMode() {
 
 void startAPMode() {
     WiFi.mode(WIFI_AP);
-    WiFi.softAP("Lightchanger-Setup", "lightchanger");
+    WiFi.softAP(AP_SSID, AP_PASSWORD);
 
     IPAddress IP = WiFi.softAPIP();
-    Serial.print("AP Mode - Connect to: Lightchanger-Setup");
-    Serial.print(" AP IP: ");
+    Serial.print("AP Mode - SSID: ");
+    Serial.println(AP_SSID);
+    Serial.print("AP IP: ");
     Serial.println(IP);
 
-    if (!MDNS.begin("lightchanger")) {
+    if (!MDNS.begin(MDNS_HOSTNAME)) {
         Serial.println("Error setting up mDNS in AP mode");
     }
 
@@ -390,22 +393,22 @@ void handleNetworkSave() {
 
 void setup() {
     Serial.begin(115200);
-    led.begin();
-    setBkgColor();
 
-    // Load config from NVS
+    // Load config from NVS first (before any peripheral init)
     configManager.begin();
 
-    // Load auth settings
-    wwwUsername = configManager.getWifiSSID();
-    wwwPassword = configManager.getWifiPassword();
-    authEnabled = configManager.getWifiPassword().length() > 0;
+    led.begin();
+
+    // Load web UI auth credentials from NVS
+    wwwUsername = configManager.getWebUsername();
+    wwwPassword = configManager.getWebPassword();
+    authEnabled = configManager.hasWebCredentials();
 
     // Load command port from NVS
     uint16_t cmdPort = configManager.getCommandPort();
     commandServer = WiFiServer(cmdPort);
 
-    if (!MDNS.begin("lightchanger-esp32")) {
+    if (!MDNS.begin(MDNS_HOSTNAME)) {
         Serial.println("Error setting up MDNS responder!");
     }
 
@@ -433,9 +436,13 @@ void setup() {
     // Start OTA
     begin_ota();
 
+    Serial.print("MDNS: ");
+    Serial.println(MDNS_HOSTNAME);
     Serial.print("Web Server on port 80, Command Server on port ");
     Serial.println(cmdPort);
-    if (apMode) Serial.println("Running in AP/Setup mode");
+    if (apMode) {
+        Serial.println("Running in AP/Setup mode");
+    }
 }
 
 void loop() {
@@ -476,6 +483,7 @@ void loop() {
                     currentlyActiveBrands.push_back(dev.brand);
                 }
             }
+            yield();  // keep WiFi/WebServer responsive between pings
         }
 
         // Clean up stale brands
